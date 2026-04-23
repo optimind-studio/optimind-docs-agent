@@ -14,7 +14,7 @@ This repo is **both** a Claude plugin *and* a Claude marketplace that lists one 
 Colleagues install with:
 
 ```
-/plugin marketplace add lqxdesign/optimind-docs
+/plugin marketplace add lqxdesign/optimind-docs_polisher-agent
 /plugin install optimind-docs@optimind
 ```
 

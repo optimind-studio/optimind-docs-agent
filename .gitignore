@@ -16,6 +16,9 @@ venv/
 # --- Claude Code (per-user, not shared) ---
 .claude/settings.local.json
 
+# --- Dev tooling indexes (per-machine, not shared) ---
+.serena/
+
 # --- Build artifacts (reproducible from source; published via GitHub Releases) ---
 /dist/
 

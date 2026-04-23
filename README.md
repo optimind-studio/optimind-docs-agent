@@ -21,7 +21,7 @@ Two ways, pick whichever your Claude Desktop supports.
 In Claude Desktop, run **both** commands:
 
 ```
-/plugin marketplace add lqxdesign/optimind-docs
+/plugin marketplace add lqxdesign/optimind-docs_polisher-agent
 /plugin install optimind-docs@optimind
 ```
 
@@ -142,4 +142,4 @@ If it's missing, run the polisher again — the font-install step is idempotent.
 
 ## License
 
-Private — Optimind / Hyperversity internal tooling. See [LICENSE](LICENSE).
+Private — Optimind internal tooling. See [LICENSE](LICENSE).

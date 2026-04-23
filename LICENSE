@@ -1,4 +1,4 @@
-Copyright (c) 2026 Optimind / Hyperversity.
+Copyright (c) 2026 Optimind.
 
 All rights reserved.
 
@@ -6,7 +6,7 @@ This source code is published publicly so it can be installed via the Claude
 Code plugin system. It is NOT released under an open-source license. The code,
 design-system references (including `skills/polish-doc/references/ui-kit.md`),
 the branded Word cover template, and the Optimind logo remain the proprietary
-property of Optimind / Hyperversity.
+property of Optimind.
 
 You may:
   - install this plugin in your own Claude Desktop / Claude Code environment
