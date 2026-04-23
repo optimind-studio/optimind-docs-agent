@@ -4,7 +4,7 @@ Apply Optimind brand styling to Word documents — branded cover page, Poppins t
 
 ## What this plugin does
 
-When installed, this plugin gives Claude a new skill called **`polish-doc`**. Ask Claude to "polish a Word doc" or "apply Optimind branding to this report" and it will:
+When installed, this plugin gives Claude a new skill: **`/polish-doc`**. You can type the slash command, or just ask Claude in plain English — "polish a Word doc" or "apply Optimind branding to this report" — and it will:
 
 1. Read your `.docx` file.
 2. Infer the document title, client, and reporting period and ask you to confirm them.
@@ -14,33 +14,47 @@ When installed, this plugin gives Claude a new skill called **`polish-doc`**. As
 
 ## Installation
 
-Two ways, pick whichever your Claude Desktop supports.
+### Where this works
+
+This plugin is a **Claude Code plugin**, so it only loads in surfaces that consume the Claude Code plugin system:
+
+- **Claude Code** (CLI, Desktop, or IDE extension) — ✅ supported
+- **Claude Cowork** — ✅ supported
+- **Claude.ai web chat** — ❌ not supported (claude.ai doesn't load Claude Code plugins). The skill will not appear there.
 
 ### Option A — Install from this GitHub marketplace (recommended)
 
-In Claude Desktop, run **both** commands:
+Run these **two** commands, in order, inside Claude Code / Cowork:
 
 ```
 /plugin marketplace add lqxdesign/optimind-docs_polisher-agent
 /plugin install optimind-docs@optimind
 ```
 
-The first command registers the marketplace (one-time). The second installs the `optimind-docs` plugin from it. You can confirm the skill is available afterward with `/plugin list`.
+| Step | What it does |
+| :--- | :--- |
+| `/plugin marketplace add …` | Registers the catalog (one-time). On its own, this does **not** install anything — it only tells Claude where the plugin lives. |
+| `/plugin install optimind-docs@optimind` | Installs the `optimind-docs` plugin from the registered marketplace. |
 
-Pull later updates by running:
+> Claude Code's plugin system is a two-step flow by design (add marketplace → install plugin). There is no single-command shortcut for third-party marketplaces; the `claude plugin install name@claude-plugins-official` pattern only works for Anthropic's official auto-loaded marketplace.
+
+After install, **restart Claude Code** so the skill is picked up. Confirm it's there by opening `/plugin` → **Installed** tab, or by typing `/` and looking for `polish-doc` in the slash-command picker.
+
+Pull later updates:
 
 ```
 /plugin marketplace update optimind
 ```
 
-Claude will refresh to the latest version on the repo's `main` branch.
+Restart Claude Code after updating. It will refresh to the latest version on the repo's `main` branch.
 
 ### Option B — Install from `.plugin` file (offline / blocked networks)
 
 1. Grab the latest `optimind-docs.plugin` from the repo's [Releases page](../../releases).
 2. Claude Desktop → **Settings → Plugins → Install from file** → pick the downloaded file.
+3. Restart Claude Code.
 
-Once installed, the `polish-doc` skill appears in Claude automatically.
+Once installed, the `/polish-doc` skill is available.
 
 ### Requirements
 

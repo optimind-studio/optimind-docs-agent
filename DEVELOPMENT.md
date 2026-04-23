@@ -11,14 +11,14 @@ This repo is **both** a Claude plugin *and* a Claude marketplace that lists one 
 - `.claude-plugin/plugin.json` — the plugin manifest (identity, version).
 - `.claude-plugin/marketplace.json` — the marketplace manifest that points `/plugin install` at the plugin.
 
-Colleagues install with:
+Colleagues install with (two commands, in order, then restart Claude Code):
 
 ```
 /plugin marketplace add lqxdesign/optimind-docs_polisher-agent
 /plugin install optimind-docs@optimind
 ```
 
-(`optimind` is the marketplace name; `optimind-docs` is the plugin name inside it.)
+(`optimind` is the marketplace name; `optimind-docs` is the plugin name inside it.) After install, restart Claude Code and the skill surfaces as `/polish-doc`.
 
 ## Repo layout (flat — Claude plugin spec)
 
