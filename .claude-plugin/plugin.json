@@ -3,8 +3,7 @@
   "version": "0.2.0",
   "description": "Applies Optimind brand styling (Poppins, semantic colors, branded cover, header/footer, table + callout variants) to Word documents without altering any source content.",
   "author": {
-    "name": "Optimind",
-    "email": "design@hyperversity.com"
+    "name": "Optimind"
   },
   "keywords": ["docx", "word", "branding", "design-system", "optimind", "polisher"]
 }

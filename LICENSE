@@ -2,10 +2,25 @@ Copyright (c) 2026 Optimind / Hyperversity.
 
 All rights reserved.
 
-This software and its accompanying assets (fonts, design-system references,
-Word templates) are proprietary internal tooling of Optimind / Hyperversity.
-No part of this repository may be copied, redistributed, modified, sublicensed,
-or used outside of Optimind / Hyperversity without prior written permission
-from the copyright holder.
+This source code is published publicly so it can be installed via the Claude
+Code plugin system. It is NOT released under an open-source license. The code,
+design-system references (including `skills/polish-doc/references/ui-kit.md`),
+the branded Word cover template, and the Optimind logo remain the proprietary
+property of Optimind / Hyperversity.
 
-For questions or permissions, contact: design@hyperversity.com
+You may:
+  - install this plugin in your own Claude Desktop / Claude Code environment
+    via the official plugin marketplace flow;
+  - read the source to understand how it works.
+
+You may NOT, without prior written permission from the copyright holder:
+  - copy, redistribute, publish, or sublicense any part of this repository;
+  - reuse the Optimind brand tokens, logo, or cover template in your own work;
+  - create derivative plugins that reuse this repository's source code.
+
+---
+
+EXCEPTION — Poppins font files (assets/fonts/Poppins-*.ttf)
+The bundled Poppins fonts are NOT covered by this proprietary notice. They
+are distributed under the SIL Open Font License, Version 1.1. See
+`assets/fonts/OFL.txt` for the full license text and governing terms.

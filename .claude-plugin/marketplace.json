@@ -1,11 +1,10 @@
 {
   "name": "optimind",
   "owner": {
-    "name": "Optimind",
-    "email": "design@hyperversity.com"
+    "name": "Optimind"
   },
   "metadata": {
-    "description": "Optimind / Hyperversity internal plugin marketplace.",
+    "description": "Optimind plugin marketplace.",
     "version": "0.2.0"
   },
   "plugins": [
@@ -15,8 +14,7 @@
       "description": "Applies Optimind brand styling to Word documents — branded cover, Poppins typography, semantic colors, header/footer, table and callout variants — without altering any source content.",
       "version": "0.2.0",
       "author": {
-        "name": "Optimind",
-        "email": "design@hyperversity.com"
+        "name": "Optimind"
       },
       "category": "docs",
       "tags": ["docx", "word", "branding", "design-system", "optimind", "polisher"]
