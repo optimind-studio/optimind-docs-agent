@@ -15,6 +15,7 @@ venv/
 
 # --- Claude Code (per-user, not shared) ---
 .claude/settings.local.json
+.claude/worktrees/
 
 # --- Dev tooling indexes (per-machine, not shared) ---
 .serena/
