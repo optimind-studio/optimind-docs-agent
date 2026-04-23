@@ -66,4 +66,7 @@ fi
 # render in Poppins on this machine.
 "$VENV_PY" "$PLUGIN_ROOT/scripts/install_fonts.py" "$FONTS_SRC" || true
 
+# Put `scripts/` on the module search path so `python -m polish` resolves.
+export PYTHONPATH="$PLUGIN_ROOT/scripts${PYTHONPATH:+:$PYTHONPATH}"
+
 exec "$VENV_PY" "$@"

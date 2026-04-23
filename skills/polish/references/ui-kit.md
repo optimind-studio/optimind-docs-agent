@@ -1,6 +1,6 @@
 # Optimind Docs UI Kit
 
-The canonical design spec for Word-doc output produced by the `/polish-word` skill. Source of truth for tokens, text styles, frames, table variants, and callout styles.
+The canonical design spec for Word-doc output produced by the `/polish` skill. Source of truth for tokens, text styles, frames, table variants, and callout styles.
 
 **Figma file:** [Optimind Docs Kit](https://www.figma.com/design/iYE9CtCoxRESvSGtTrfBhs/Optimind-Docs-Kit?node-id=2501-286) — file key `iYE9CtCoxRESvSGtTrfBhs`, page `Doc`.
 
@@ -60,6 +60,8 @@ All labels that are "UPPER" should be rendered uppercase **via display (CSS text
 | Colors handoff | `2501:677` |
 | Docx Demo (Classic / red-header style) | `2550:17` |
 | Docx Demo — All Styles (Minimal / rule-based) | `2577:17` |
+
+The DS-Extender agent anchors new components to the right of node `2501:286` on page `Doc`.
 
 ---
 
@@ -132,23 +134,27 @@ A single-pixel bottom border in `border/strong` is applied to the paragraph **pr
 5. **List paragraphs** get tight normalised indent: left = `360 + ilvl*360` twips, hanging = `180` twips.
 6. **VML horizontal rules** from the source (decorative dividers) get stripped — we replace them with our own H1 border.
 7. Cover detection priority: explicit page break → first numbered H1 → tiny-doc fallback.
-8. Table-variant detection: `Classic` is the default; `Minimal` is an opt-in choice (pass `--table-style minimal` or `auto`).
+8. Table-variant detection: `Classic` is the default; `Minimal` is an opt-in choice.
 
 ---
 
 ## Implementation mirror
 
-These tokens are mirrored in [scripts/polish_doc.py](scripts/polish_doc.py) as hardcoded `RGBColor` constants:
+These tokens are mirrored in [scripts/polish/render/tokens.py](../../../scripts/polish/render/tokens.py) as the single source of truth the renderer consumes:
 
 ```
-RED        = RGBColor(0xF5, 0x2C, 0x39)  # brand
-TEXT_PRI   = RGBColor(0x00, 0x00, 0x00)  # text/primary
-TEXT_SEC   = RGBColor(0x62, 0x65, 0x67)  # text/secondary
-BG_SUBTLE  = RGBColor(0xF2, 0xF3, 0xF4)  # bg/subtle
-BG_BRAND   = RGBColor(0xFE, 0xEC, 0xEE)  # bg/brand-subtle
-BORDER_DEF = RGBColor(0xE5, 0xE7, 0xE9)  # border/default
-BORDER_STR = RGBColor(0xD7, 0xDB, 0xDD)  # border/strong
-WHITE      = RGBColor(0xFF, 0xFF, 0xFF)  # text/on-brand, bg/page
+T.RED        = RGBColor(0xF5, 0x2C, 0x39)  # brand
+T.TEXT_PRI   = RGBColor(0x00, 0x00, 0x00)  # text/primary
+T.TEXT_SEC   = RGBColor(0x62, 0x65, 0x67)  # text/secondary
+T.BG_SUBTLE  = RGBColor(0xF2, 0xF3, 0xF4)  # bg/subtle
+T.BG_BRAND   = RGBColor(0xFE, 0xEC, 0xEE)  # bg/brand-subtle
+T.BORDER_DEF = RGBColor(0xE5, 0xE7, 0xE9)  # border/default
+T.BORDER_STR = RGBColor(0xD7, 0xDB, 0xDD)  # border/strong
+T.WHITE      = RGBColor(0xFF, 0xFF, 0xFF)  # text/on-brand, bg/page
 ```
 
-If a Figma token changes, update both this document and the constants above.
+## Runtime extensions
+
+When the DS-Extender subagent designs a new component at polish time, its tokens are written to [scripts/polish/render/tokens_extensions.json](../../../scripts/polish/render/tokens_extensions.json) and the corresponding renderer lands in [scripts/polish/render/dynamic/](../../../scripts/polish/render/dynamic/). `tokens.py` merges the extension tokens into its namespace at import, so generated renderers can reference them as `T.<TOKEN>` like any built-in. New components are added to the sections above on promotion — they should feel native, not bolted-on.
+
+If a Figma token changes, update both this document and `tokens.py`. Runtime extensions keep the Figma round-trip honest: every extension records the Figma `node_id` of the materialized component, linked from the `.report.html` sidecar.

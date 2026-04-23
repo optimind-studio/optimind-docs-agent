@@ -1,31 +1,37 @@
 # Optimind Docs
 
-Apply Optimind brand styling to Word documents — branded cover page, Poppins typography, semantic colors, header/footer, table and callout variants — without changing any source content. PDFs are handled too, via a separate convert-first step.
+Rebuild Word and PDF reports as fully branded Optimind documents. Source text, numbers, dates, and values are preserved verbatim — only the visual styling and structure are regenerated.
 
-> **What's new in 0.3.0**
-> — `/polish-doc` has been renamed to **`/polish-word`** for symmetry. If you had muscle memory for the old command, use the new one.
-> — New skill **`/polish-pdf`** converts a PDF into a `.docx` so you can then run `/polish-word` on it. Two explicit commands, one per input type. No auto-chain — you review the converted `.docx` before polishing.
+> **What's new in 0.5.0** — the architecture is rebuilt end-to-end.
+> - **One command: `/polish`.** Auto-detects `.docx` and `.pdf`. The old `/polish-word` and `/polish-pdf` still exist as deprecation stubs that redirect here.
+> - **Five subagents, zero API key.** Intake, Auditor, Classifier, DS-Extender, and Renderer-QA run **inside your Claude Code session** via a state-file + stdout-sentinel handoff protocol. `ANTHROPIC_API_KEY` is no longer required.
+> - **Self-extending design system.** When a document contains an element that doesn't match any known DS component, DS-Extender designs the new component, stages a runtime-valid Python renderer, and pushes the component to the [Optimind Docs Kit Figma file](https://www.figma.com/design/iYE9CtCoxRESvSGtTrfBhs/Optimind-Docs-Kit) via the `use_figma` MCP tool. Generated artefacts are committed to git, so every new component is reviewable as a normal diff.
+> - **Auto-retry on QA failure** (up to 2 attempts), looping back to the stage diagnosed by the Renderer-QA agent. No silent ships.
+> - **HTML report next to every output.** `report.html` summarises block counts, subagent decisions, DS extensions, audit findings, and any retries — human-readable, no JSON spelunking required.
+> - **Scales to 200-page docs.** Auditor samples every Nth page plus every heading, table, chart, callout, and KPI strip; Classifier batches ambiguous blocks by shape signature (~50 → ~8 calls).
 
 ## What this plugin does
 
-When installed, this plugin gives Claude **two** skills:
+When installed, this plugin gives Claude a single skill:
 
-- **`/polish-word`** — takes a `.docx` and applies Optimind brand styling. You can type the slash command or ask Claude in plain English ("polish a Word doc", "apply Optimind branding to this report").
-- **`/polish-pdf`** — takes a `.pdf`, converts it to a `.docx` (carrying text, tables, and images over from the PDF's text layer verbatim), and saves it to `~/OptimindDocs/input/` so `/polish-word` can pick it up as the next step.
+- **`/polish`** — takes a `.docx`, `.pdf`, or a folder of them, and produces a fully branded Optimind report. Type the slash command or ask Claude in plain English ("polish this report", "apply Optimind branding to this file").
 
-**Word flow** (`/polish-word`):
-1. Read your `.docx` file.
-2. Infer the document title, client, and reporting period and ask you to confirm them.
-3. Produce a branded copy — new cover page, consistent typography, styled headings, tables, and callouts — saved to `~/OptimindDocs/output/`.
+**Pipeline (stage machine, driven by the skill orchestrator):**
 
-**PDF flow** (`/polish-pdf` → `/polish-word`):
-1. Convert PDF → `.docx`. Output lands in `~/OptimindDocs/input/`.
-2. Open it in Word to spot-check — PDF layout doesn't always survive the conversion cleanly (page breaks, table lines, image anchors can shift).
-3. Run `/polish-word` on the converted file to apply the Optimind styling.
+1. **Intake** — resolve the path, detect format, infer cover details (title / client / period), confirm with the user once.
+2. **Parse** — ingest (python-docx / pdfplumber / pymupdf), flatten floating shapes, normalize, reconstruct, tokenize into a primitive block stream.
+3. **Classify** — rules fast-path; ambiguous blocks are grouped by shape signature and handed to the Classifier agent in batches.
+4. **Refine** — deterministic cleanup (neighbor merges, dedupe).
+5. **Chart-data extraction** — rules strategies (adjacent data table; image word extraction); low-confidence blocks escalated to the Auditor/Classifier.
+6. **DS-Extend** — novel blocks routed to DS-Extender, which looks up Figma first, designs the component, stages tokens + a runtime-valid renderer, and round-trips to Figma via `use_figma`.
+7. **Render** — cover page + per-block branded renderers (static + dynamic dispatch), driven by the design-system tokens in `ui-kit.md` and `tokens_extensions.json`.
+8. **Verify** — content preservation (word-level Counter match) + layout smoke → structured QADiagnosis.
+9. **Promote** — atomically merge staged DS extensions into the repo if QA passed; discard otherwise.
+10. **Report** — emit `<name>-polished-<date>.docx`, `.classification.json`, and `.report.html`.
 
-**Source text is never altered.** The Word polisher verifies content preservation before saving, and aborts if anything it was about to write would change the underlying text, numbers, or dates. The PDF converter does no rewriting — it copies text straight from the PDF text layer.
+**Source text is never altered.** The pipeline runs a word-level content-preservation check before emitting; if anything was dropped or changed, Renderer-QA routes back to the render stage with a narrower strategy. On exhaustion the document is emitted **marked "degraded"** in the HTML report with the exact defect surfaced — never silently shipped, never blocked.
 
-**No OCR.** `/polish-pdf` needs a PDF with a real text layer. Scanned documents and image-only PDFs will fail with a clear error — re-export from the source application, or OCR the PDF first with a dedicated tool.
+**No OCR.** `/polish` still needs a PDF with a real text layer. Scanned documents and image-only PDFs will produce an empty block tree — re-export from the source application, or OCR first.
 
 ## Installation
 
@@ -51,9 +57,9 @@ Run these **two** commands, in order, inside Claude Code / Cowork:
 | `/plugin marketplace add …` | Registers the catalog (one-time). On its own, this does **not** install anything — it only tells Claude where the plugin lives. |
 | `/plugin install optimind-docs@optimind` | Installs the `optimind-docs` plugin from the registered marketplace. |
 
-> Claude Code's plugin system is a two-step flow by design (add marketplace → install plugin). There is no single-command shortcut for third-party marketplaces; the `claude plugin install name@claude-plugins-official` pattern only works for Anthropic's official auto-loaded marketplace.
+> Claude Code's plugin system is a two-step flow by design (add marketplace → install plugin).
 
-After install, **restart Claude Code** so the skills are picked up. Confirm they're there by opening `/plugin` → **Installed** tab, or by typing `/` and looking for `polish-word` and `polish-pdf` in the slash-command picker.
+After install, **restart Claude Code** so the skill and subagents are picked up. Confirm by opening `/plugin` → **Installed** tab, or by typing `/` and looking for `polish` in the slash-command picker.
 
 Pull later updates:
 
@@ -61,15 +67,13 @@ Pull later updates:
 /plugin marketplace update optimind
 ```
 
-Restart Claude Code after updating. It will refresh to the latest version on the repo's `main` branch.
+Restart Claude Code after updating.
 
 ### Option B — Install from `.plugin` file (offline / blocked networks)
 
 1. Grab the latest `optimind-docs.plugin` from the repo's [Releases page](../../releases).
 2. Claude Desktop → **Settings → Plugins → Install from file** → pick the downloaded file.
 3. Restart Claude Code.
-
-Once installed, the `/polish-word` and `/polish-pdf` skills are available.
 
 ### Requirements
 
@@ -78,58 +82,62 @@ Once installed, the `/polish-word` and `/polish-pdf` skills are available.
   - **Windows: nothing to install.** On first run, the plugin silently downloads Python 3.12 from python.org and does a per-user install (no admin required). Takes ~1–2 minutes on first run. If you already have Python 3 installed, it's detected and reused.
   - **macOS:** usually preinstalled. If not, `brew install python`.
   - **Linux:** use your package manager, e.g. `sudo apt install python3 python3-venv`.
+- **Figma MCP access** — only needed to auto-publish new DS components to the Optimind Docs Kit Figma file. Without it, DS-Extender still produces the code-side artefacts (pipeline keeps working) and flags the Figma gap in the HTML report for manual designer import — the degradation is graceful, not blocking.
+- **No Anthropic API key** — subagents run inside your Claude Code session.
 
-That's it. On first run the plugin:
+On first run the plugin:
 
 1. (Windows only, if needed) downloads and silently installs Python 3.12 from python.org — per-user, no admin required.
-2. Creates its own isolated Python environment and installs its libraries (`python-docx`, `docxtpl`, `lxml`, `pdf2docx`) — takes ~30 seconds.
-3. Installs the **Poppins** font family into your user font folder **only if it's not already on your system** (checked across `~/Library/Fonts`, `/Library/Fonts`, and `/System/Library/Fonts` on macOS; `%LOCALAPPDATA%\Microsoft\Windows\Fonts` and `C:\Windows\Fonts` on Windows; `~/.local/share/fonts` and `/usr/share/fonts` on Linux). No admin rights needed.
+2. Creates its own isolated Python environment and installs its libraries (`python-docx`, `docxtpl`, `lxml`, `pdfplumber`, `pymupdf`, `matplotlib`, `jinja2`, plus supporting numerics) — takes ~30–60 seconds.
+3. Installs the **Poppins** font family into your user font folder **only if it's not already on your system**. No admin rights needed.
 
-Every run after that is instant (conversion itself scales with PDF page count, a few seconds per ten pages).
+Every run after that is instant (polish time scales with document size — expect 30–90 s per report, more on ≥100-page docs).
 
 ## How to use
 
-### Polishing a Word file
+### Polishing a single file (Word or PDF)
 
 1. In Claude, say something like:
-   - "Polish this Word doc."
-   - "Apply Optimind branding to `~/OptimindDocs/input/report.docx`."
-   - "Brand the Google Ads report for MDC Group."
-   - Or run `/polish-word` directly.
+   - "Polish this report."
+   - "Brand this PDF."
+   - "Apply Optimind branding to `~/OptimindDocs/input/report.pdf`."
+   - Or run `/polish` directly.
 
-2. Claude will ask for the file path (or read it from `~/OptimindDocs/input/` if you've dropped one there) and confirm the cover details with you.
+2. Claude will ask for the file path (or read it from `~/OptimindDocs/input/`), extract the first few pages to infer title / client / period, and ask you to confirm.
 
-3. The polished file is written to `~/OptimindDocs/output/` with the same filename as the input.
+3. The orchestrator runs the stage machine end-to-end. When a subagent is needed (Classifier / Chart inference / DS-Extender / Auditor / Renderer-QA), the skill invokes it with a bounded context window and writes the reply back into the run's state bundle. Python resumes from there.
 
-### Polishing a PDF
+4. The branded `.docx`, the classification sidecar, and the HTML report all land in `~/OptimindDocs/output/`.
 
-PDFs go through a two-step flow — convert first, then polish. This is deliberate: PDF-to-Word conversion isn't perfect (layouts can shift), so you get to review the intermediate `.docx` before the branding pass locks it in.
+### Polishing a folder (batch mode)
 
-1. Run `/polish-pdf` (or say "polish this PDF" / "convert this PDF for polishing"). Claude asks for the PDF path, or pulls one from `~/OptimindDocs/input/`.
+Hand `/polish` a folder path. The orchestrator confirms the shared cover details once, then loops the stage machine over every `.docx` and `.pdf` inside. Each run gets its own `run-id` under `~/OptimindDocs/.polish-state/`. You get:
 
-2. The converter produces a `.docx` in `~/OptimindDocs/input/` with the same base filename and prints a summary:
-   ```
-   ✓ Converted: 12 pages, 3 tables, 2 images
-   ✓ Saved to: ~/OptimindDocs/input/report.docx
-   ```
+- one `<name>-polished-<date>.docx` + `.classification.json` + `.report.html` per input, and
+- a rollup summary in the terminal.
 
-3. Open that `.docx` in Microsoft Word and spot-check it — headings, data tables, anywhere numbers show up. If the conversion mangled something, re-export the source PDF more cleanly (ideally from the original app — Google Docs, Word, Pages — rather than from a scan or screenshot tool) and try again.
+### Reviewing the output
 
-4. Once you're happy, run `/polish-word` on the converted file. The final branded output lands in `~/OptimindDocs/output/`.
+Each run writes three files next to the output:
 
-**What won't work:** scanned or image-only PDFs. The plugin does not do OCR. `/polish-pdf` detects a missing text layer and exits with a clear error. Password-protected PDFs are also rejected — remove the password (e.g. open in Preview and re-export) first.
+```
+~/OptimindDocs/output/report-polished-2026-04-24.docx
+~/OptimindDocs/output/report-polished-2026-04-24.classification.json
+~/OptimindDocs/output/report-polished-2026-04-24.report.html
+```
+
+Open the `.report.html` first — it summarises block counts, retries, DS extensions, and any warnings in plain English. The `.classification.json` is the machine-readable ground truth if you need to audit a specific block.
 
 ### Folder convention
 
 ```
 ~/OptimindDocs/
-  ├── input/    ← drop Word files and PDFs here; converted .docx lands here too
-  └── output/   ← polished copies appear here
+  ├── input/           ← drop Word files and PDFs here
+  ├── output/          ← polished copies + sidecars + HTML reports
+  └── .polish-state/   ← durable per-run state bundles (safe to delete)
 ```
 
-Both folders are created the first time the plugin runs. You can also pass an absolute path to a file anywhere on disk — the input folder is a convenience, not a requirement.
-
-Set the environment variable `OPTIMIND_DOCS_OUTPUT` to override the output location if you want polished files saved elsewhere.
+All three are created the first time the plugin runs. You can also pass an absolute path to a file anywhere on disk.
 
 ## Table variants
 
@@ -138,34 +146,66 @@ The polisher ships with two table styles from the Optimind design system:
 - **Classic** (default) — red header row, alternating zebra rows.
 - **Minimal** — rule-based, no fills. Best for dense numeric comparison tables.
 
-Ask Claude to use `--table-style minimal` or `--table-style auto` if you want a different variant. `auto` picks Minimal for mostly-numeric tables and Classic otherwise.
+Variant selection is automatic — the Classifier picks Minimal for mostly-numeric tables and Classic otherwise. New DS components added by DS-Extender may ship additional variants.
 
 ## What's inside the plugin
 
 ```
 .
 ├── .claude-plugin/
-│   ├── plugin.json                   ← plugin manifest
+│   ├── plugin.json                   ← plugin manifest (0.5.0)
 │   └── marketplace.json              ← marketplace catalog
+├── .mcp.json                         ← declares the Figma MCP (design-system round-trip)
+├── settings.json                     ← audit.sample_n, retry.max_attempts, figma.file_key, state.dir
+├── agents/
+│   ├── intake.md                     ← resolves path, infers cover metadata
+│   ├── auditor.md                    ← sampling-based QA across the full block stream
+│   ├── classifier.md                 ← resolves ambiguous blocks (batched)
+│   ├── ds-extender.md                ← designs + publishes new DS components
+│   └── renderer-qa.md                ← diagnoses render defects, owns retry policy
+├── commands/
+│   └── polish.md                     ← slash-command shim that invokes the skill
 ├── skills/
-│   ├── polish-word/
-│   │   ├── SKILL.md                  ← the Word polisher workflow Claude follows
-│   │   └── references/ui-kit.md      ← the design-system spec (colors, type, variants)
-│   └── polish-pdf/
-│       └── SKILL.md                  ← the PDF → Word converter workflow
+│   ├── polish/                       ← the orchestrator
+│   │   ├── SKILL.md
+│   │   └── references/
+│   │       ├── ui-kit.md             ← design-system spec (colors, type, variants)
+│   │       ├── handoff-protocol.md   ← JSON schemas for agent ↔ Python
+│   │       ├── state-machine.md      ← stage transitions + exit codes
+│   │       └── report-template.html  ← Jinja2 template for .report.html
+│   ├── polish-word/SKILL.md          ← deprecation stub → /polish
+│   └── polish-pdf/SKILL.md           ← deprecation stub → /polish
 ├── scripts/
-│   ├── polish_doc.py                 ← the core Word polisher
-│   ├── pdf_to_docx.py                ← PDF → .docx converter (pdf2docx + PyMuPDF)
-│   ├── extract_text.py               ← pulls cover details from a source .docx
-│   ├── install_fonts.py              ← cross-platform Poppins installer (skip-if-exists)
-│   ├── run.sh                        ← launcher (macOS / Linux / Git Bash)
-│   ├── run.ps1                       ← launcher (Windows PowerShell)
+│   ├── polish/                       ← Python package: stage machine
+│   │   ├── __main__.py               ← --stage / --state-dir / --resume entrypoint
+│   │   ├── state.py                  ← durable state bundle
+│   │   ├── handoff.py                ← sentinel emit, pending queue, cache
+│   │   ├── sample.py                 ← deterministic Auditor sampling
+│   │   ├── html_report.py            ← Jinja2 HTML renderer
+│   │   ├── model.py                  ← Block / Table / Chart / DSExtension / RetryRecord / …
+│   │   ├── ingest/                   ← docx_reader.py + pdf_reader.py
+│   │   ├── flatten.py / normalize.py / reconstruct.py / tokenize_blocks.py / refine.py
+│   │   ├── classify.py               ← rules fast-path + pending queue
+│   │   ├── chart_extract.py          ← 2-strategy chart extraction + pending queue
+│   │   ├── verify.py                 ← QADiagnosis (no raises)
+│   │   ├── report.py                 ← sidecar + HTML report writer
+│   │   └── render/
+│   │       ├── tokens.py             ← built-in tokens + runtime extension merge
+│   │       ├── tokens_extensions.json← committed DS extensions (starts empty)
+│   │       ├── docx_writer.py        ← static + dynamic renderer dispatch
+│   │       ├── dynamic_dispatch.py   ← AST-validated generated renderer loader
+│   │       ├── dynamic/              ← DS-Extender-authored renderers (committed)
+│   │       └── (heading / paragraph / list / table / kpi_strip / callout / chart / figure / cover)
+│   ├── extract_text.py               ← cover-detail inference
+│   ├── install_fonts.py              ← cross-platform Poppins installer
+│   ├── run.sh / run.ps1              ← launchers
 │   └── requirements.txt
 ├── assets/
-│   ├── cover_template.docx           ← Jinja template for the cover page
-│   └── fonts/                        ← bundled Poppins (Regular / Bold / SemiBold)
-├── README.md                         ← this file (end-user install + usage)
+│   ├── cover_template.docx
+│   └── fonts/                        ← bundled Poppins
+├── README.md                         ← this file
 ├── DEVELOPMENT.md                    ← maintainer notes
+├── CHANGELOG.md
 └── LICENSE
 ```
 
@@ -173,34 +213,29 @@ Contributors: see [DEVELOPMENT.md](DEVELOPMENT.md) for the edit / test / release
 
 ## Design system source of truth
 
-Colors, fonts, and spacing in the output all come from the Optimind Docs Kit Figma file:
+Colors, fonts, spacing, and component geometry in the output all come from the Optimind Docs Kit Figma file:
 
 - File: [Optimind Docs Kit](https://www.figma.com/design/iYE9CtCoxRESvSGtTrfBhs/Optimind-Docs-Kit)
-- Page: `Doc`
+- Reference frame: node `2550:17` (Docx Demo — red-header variant)
 
-If tokens change in Figma, update both `skills/polish-word/references/ui-kit.md` and the matching `RGBColor` constants at the top of `scripts/polish_doc.py`.
+If tokens change in Figma, update both `skills/polish/references/ui-kit.md` and the `T.*` constants in `scripts/polish/render/tokens.py`. New components added by DS-Extender at runtime land in `scripts/polish/render/tokens_extensions.json` + `scripts/polish/render/dynamic/<kind>.py` — all committed to git so every extension is reviewable as a normal diff.
 
 ## Troubleshooting
 
 **"Python 3 was not found on this machine."**
 The plugin couldn't locate `python3`. Install Python 3 (`brew install python` or download from [python.org](https://www.python.org/downloads/)) and try again.
 
-**"Content-preservation check failed."**
-The Word polisher detected that it was about to write a file whose text differed from the input. This is a safety guard — the script aborted on purpose. Re-ask Claude to run it, and if it keeps failing, open an issue with the input document (content stays local; don't share sensitive files).
+**Run is marked "degraded" in the HTML report.**
+The Renderer-QA agent exhausted 2 retries and the orchestrator shipped the best-effort output with the exact defect surfaced. Open `.report.html` → the "Degraded" banner names the block(s) and stage that failed. Common causes: a DS extension produced invalid output (reviewable in `scripts/polish/render/dynamic/`), chart extraction couldn't reach 0.7 confidence, or a complex floating shape broke the flatten step.
 
-**"This PDF has no text layer — it looks scanned or image-only."**
-`/polish-pdf` cannot extract text from image-only PDFs (scans, photos of printed pages, PDFs exported from screenshot tools). The plugin does not do OCR. Fix: re-export the PDF from the original application (Google Docs, Word, Pages, the dashboard that generated the report), or OCR it first with a dedicated tool, then run `/polish-pdf` again.
-
-**"This PDF is password-protected."**
-`/polish-pdf` refuses encrypted PDFs. Open it in Preview (macOS) or Adobe Acrobat, re-export without a password, then try again.
+**PDF produces an empty output.**
+The PDF likely has no text layer (scanned document, screenshot-to-PDF). The plugin does not OCR. Re-export from the source application (Google Docs, Word, Pages, Looker, Tableau) or OCR it first with a dedicated tool.
 
 **Fonts look wrong in the output (wrong typeface, odd spacing).**
-The first run installs Poppins automatically into your user font folder, but Word/Pages sometimes needs to be restarted before it sees newly-installed fonts. Quit and reopen Word (or Pages), then reopen the polished document. Note: Apple Pages substitutes fonts more aggressively than Word — for the cleanest result, open the output in Microsoft Word or Google Docs. If Poppins still isn't picked up, check whether it actually landed:
+The first run installs Poppins automatically into your user font folder, but Word/Pages sometimes needs to be restarted before it sees newly-installed fonts. Quit and reopen Word (or Pages), then reopen the polished document. Apple Pages substitutes fonts more aggressively than Word — for the cleanest result, open the output in Microsoft Word or Google Docs.
 
-- macOS: open Font Book and search for "Poppins".
-- Windows: open **Settings › Personalization › Fonts** and search for "Poppins".
-
-If it's missing, run the polisher again — the font-install step is idempotent.
+**DS-Extender didn't publish to Figma.**
+The `use_figma` MCP call failed (common on fresh installs before Figma MCP auth). The code-side artefacts still land (`tokens_extensions.json` + `dynamic/<kind>.py`), so the pipeline keeps working — only the Figma side needs manual import. The HTML report lists the affected components in its "manual cleanup" section.
 
 ## License
 

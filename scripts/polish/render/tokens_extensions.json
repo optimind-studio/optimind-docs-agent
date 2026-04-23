@@ -1,0 +1,5 @@
+{
+  "hex_tokens": {},
+  "text_styles": {},
+  "_comment": "Populated at runtime by the DS-Extender subagent. Committed for reproducibility — every new component is reviewable as a normal diff. See scripts/polish/render/tokens.py for the merge logic."
+}

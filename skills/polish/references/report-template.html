@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>{{ title }} — Optimind polish report</title>
+<style>
+  :root {
+    --brand: #F52C39;
+    --text-pri: #000;
+    --text-sec: #626567;
+    --bg-page: #fff;
+    --bg-subtle: #F2F3F4;
+    --bg-brand-subtle: #FEECEE;
+    --border-def: #E5E7E9;
+    --border-str: #D7DBDD;
+    --ok: #2E7D32;
+    --warn: #ED6C02;
+    --err: #D32F2F;
+  }
+  html, body { margin: 0; padding: 0; background: var(--bg-page); color: var(--text-pri); font: 14px/1.5 "Poppins", -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 32px; }
+  header { border-bottom: 1px solid var(--border-str); padding-bottom: 16px; margin-bottom: 24px; }
+  h1 { margin: 0 0 4px 0; font-size: 28px; font-weight: 700; }
+  .meta { color: var(--text-sec); font-size: 13px; }
+  .badge { display: inline-block; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; margin-left: 8px; vertical-align: middle; }
+  .badge.clean { background: #E8F5E9; color: var(--ok); }
+  .badge.degraded { background: #FFF3E0; color: var(--warn); }
+  .badge.failed { background: #FFEBEE; color: var(--err); }
+  section { margin: 32px 0; }
+  h2 { font-size: 18px; margin: 0 0 12px 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+  .kpi { background: var(--bg-subtle); padding: 14px 18px; border-radius: 6px; }
+  .kpi .v { font-size: 22px; font-weight: 700; }
+  .kpi .l { font-size: 10px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--text-sec); margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table th { text-align: left; background: var(--brand); color: #fff; padding: 10px 12px; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; }
+  table td { padding: 8px 12px; border-bottom: 1px solid var(--border-def); vertical-align: top; }
+  table tr:nth-child(even) td { background: var(--bg-subtle); }
+  .finding { border-left: 3px solid var(--border-str); padding: 8px 12px; margin: 6px 0; background: var(--bg-subtle); }
+  .finding.high { border-left-color: var(--err); }
+  .finding.medium { border-left-color: var(--warn); }
+  .finding.low { border-left-color: var(--text-sec); }
+  .finding .head { font-weight: 600; font-size: 12px; }
+  .finding .ev { color: var(--text-sec); font-size: 12px; margin-top: 4px; font-family: "SF Mono", Menlo, monospace; }
+  a { color: var(--brand); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  footer { color: var(--text-sec); font-size: 11px; margin-top: 48px; border-top: 1px solid var(--border-def); padding-top: 16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>{{ title }}
+    {% if degraded %}<span class="badge degraded">Degraded</span>
+    {% elif failed %}<span class="badge failed">Failed</span>
+    {% else %}<span class="badge clean">Clean</span>{% endif %}
+  </h1>
+  <div class="meta">
+    {{ client }} &middot; {{ period }} &middot; Run {{ run_id }} &middot; {{ started_at }} &middot; {{ duration_s }}s
+  </div>
+</header>
+
+<section>
+  <h2>At a glance</h2>
+  <div class="grid">
+    <div class="kpi"><div class="v">{{ block_counts.total }}</div><div class="l">Blocks</div></div>
+    <div class="kpi"><div class="v">{{ page_count }}</div><div class="l">Pages</div></div>
+    <div class="kpi"><div class="v">{{ extensions | length }}</div><div class="l">New DS components</div></div>
+    <div class="kpi"><div class="v">{{ retries_total }}</div><div class="l">Retries</div></div>
+    <div class="kpi"><div class="v">{{ warnings | length }}</div><div class="l">Warnings</div></div>
+  </div>
+</section>
+
+<section>
+  <h2>Block breakdown</h2>
+  <table>
+    <thead><tr><th>Kind</th><th>Count</th><th>Source</th></tr></thead>
+    <tbody>
+      {% for row in block_breakdown %}
+      <tr><td>{{ row.kind }}</td><td>{{ row.count }}</td><td>{{ row.source }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+{% if extensions %}
+<section>
+  <h2>Design-system extensions applied</h2>
+  <table>
+    <thead><tr><th>Component</th><th>Added tokens</th><th>Figma</th><th>Rationale</th></tr></thead>
+    <tbody>
+      {% for ext in extensions %}
+      <tr>
+        <td><code>{{ ext.name }}</code></td>
+        <td>{{ ext.tokens_added | join(", ") }}</td>
+        <td>
+          {% if ext.figma_node_id %}
+            <a href="https://figma.com/design/{{ figma_file_key }}/?node-id={{ ext.figma_node_id }}">{{ ext.figma_node_id }}</a>
+          {% else %}
+            <span style="color: var(--warn)">pending — see manual-cleanup</span>
+          {% endif %}
+        </td>
+        <td>{{ ext.rationale }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+{% if findings %}
+<section>
+  <h2>Audit findings</h2>
+  {% for f in findings %}
+    <div class="finding {{ f.severity }}">
+      <div class="head">Block {{ f.block_index }} &middot; {{ f.severity | upper }} &middot; {{ f.recommended_action }}</div>
+      <div>{{ f.issue }}</div>
+      <div class="ev">{{ f.evidence }}</div>
+    </div>
+  {% endfor %}
+</section>
+{% endif %}
+
+{% if qa_runs %}
+<section>
+  <h2>QA runs</h2>
+  <table>
+    <thead><tr><th>Attempt</th><th>Passed</th><th>Stage retried</th><th>Reason</th></tr></thead>
+    <tbody>
+      {% for run in qa_runs %}
+      <tr>
+        <td>{{ run.attempt }}</td>
+        <td>{% if run.passed %}✓{% else %}✗{% endif %}</td>
+        <td>{{ run.diagnosis.stage_to_retry if run.diagnosis else "—" }}</td>
+        <td>{{ run.diagnosis.reason if run.diagnosis else "all checks passed" }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+{% if warnings %}
+<section>
+  <h2>Warnings</h2>
+  <ul>{% for w in warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+</section>
+{% endif %}
+
+<footer>
+  Source: <code>{{ input_path }}</code> &middot;
+  Output: <code>{{ output_path }}</code> &middot;
+  Sidecar: <a href="{{ sidecar_path }}">classification.json</a>
+</footer>
+
+</div>
+</body>
+</html>

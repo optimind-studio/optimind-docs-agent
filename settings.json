@@ -1,0 +1,28 @@
+{
+  "$schema": "https://code.claude.com/schemas/plugin-settings.json",
+  "polish": {
+    "audit": {
+      "sample_n_small": 3,
+      "sample_n_medium": 5,
+      "sample_n_large": 10,
+      "small_page_threshold": 50,
+      "large_page_threshold": 100,
+      "chunk_size": 30
+    },
+    "retry": {
+      "max_attempts": 2
+    },
+    "figma": {
+      "file_key": "iYE9CtCoxRESvSGtTrfBhs",
+      "target_page": "Doc",
+      "anchor_node_id": "2501:286"
+    },
+    "state": {
+      "dir": "~/OptimindDocs/.polish-state"
+    },
+    "output": {
+      "dir": "~/OptimindDocs/output",
+      "date_stamped": true
+    }
+  }
+}

@@ -1,9 +1,9 @@
 {
   "name": "optimind-docs",
-  "version": "0.3.0",
-  "description": "Applies Optimind brand styling (Poppins, semantic colors, branded cover, header/footer, table + callout variants) to Word documents, with a companion step for converting PDFs to Word first — all without altering any source content.",
+  "version": "0.5.0",
+  "description": "One command, /polish, that rebuilds Word and PDF reports as fully branded Optimind documents. A five-role subagent orchestration (Intake, Auditor, Classifier, DS-Extender, Renderer-QA) handles ambiguous content, extends the design system when novel elements appear (round-tripped to Figma via the use_figma MCP), and auto-retries on QA failure. Source text, numbers, dates, and values are preserved verbatim. Emits a branded .docx plus a classification sidecar and an HTML audit report for every run.",
   "author": {
     "name": "Optimind"
   },
-  "keywords": ["docx", "word", "pdf", "branding", "design-system", "optimind", "polisher"]
+  "keywords": ["docx", "word", "pdf", "branding", "design-system", "optimind", "polisher", "subagents", "figma"]
 }

@@ -153,5 +153,12 @@ try {
     Write-Info "Font install step skipped: $_"
 }
 
+# Put `scripts/` on the module search path so `python -m polish` resolves.
+if ($env:PYTHONPATH) {
+    $env:PYTHONPATH = "$ScriptDir;$env:PYTHONPATH"
+} else {
+    $env:PYTHONPATH = $ScriptDir
+}
+
 & $VenvPy @args
 exit $LASTEXITCODE

@@ -1,90 +1,20 @@
 ---
 name: polish-word
-description: Applies Optimind brand styling to a Word document (.docx) — branded cover page, Poppins typography, semantic colors, header/footer, table and callout variants — without changing any source text. Trigger when the user asks to "polish a Word doc", "apply Optimind branding to this Word file", "brand this report", or shares a .docx and asks for formatting. For PDF input, use `/polish-pdf` first to convert to .docx. Never mutates content, numbers, dates, or values; only visual styling.
+description: Deprecated in v0.5.0 — redirects to the unified /polish skill, which auto-detects .docx and .pdf. This stub only exists so users who still invoke /polish-word get pointed at the new command without errors.
 ---
 
-# Optimind Word Document Polisher
+# Deprecated — use `/polish`
 
-You apply Optimind brand styling to Word documents. You never change text, numbers, dates, or values — only visual formatting.
+As of v0.5.0 the Word and PDF pipelines are unified under a single `/polish` command that auto-detects the file type, orchestrates the subagent roles (Intake, Auditor, Classifier, DS-Extender, Renderer-QA), and writes an HTML report alongside every output.
 
-## Before anything else
+## What to do
 
-Read the design-system reference at `${CLAUDE_PLUGIN_ROOT}/skills/polish-word/references/ui-kit.md`. It is the source of truth for colors, text styles, table variants, and callout styles the polisher targets. Do not skip this — it is the context you need to reason about any user question or edge case that comes up.
+Tell the user: "The `/polish-word` command was retired in v0.5.0. Run `/polish` instead — it auto-detects `.docx` and `.pdf` and does everything this skill used to do (plus auto-retry on QA failure, a human-readable HTML report, and a self-extending design system)."
 
-## Drop-folder convention
+Then hand off to the [polish](../polish/SKILL.md) skill immediately. No other action is needed in this file — do not attempt to run the old v0.4 pipeline.
 
-User-facing files live under `~/OptimindDocs/`:
+## Migration notes
 
-- `~/OptimindDocs/input/` — where the user drops Word files they want polished
-- `~/OptimindDocs/output/` — where the polished versions get written
-
-The first run of this skill creates both folders automatically. If the user gives an absolute path to a file elsewhere on disk, that works too — the polisher doesn't require the file to be inside `input/`.
-
-## Steps to follow
-
-1. Ask the user: "What's the path to the Word document you'd like to polish? (You can also drop it into `~/OptimindDocs/input/`.)"
-
-2. Once you have the path, extract the text to infer cover details.
-
-   **On Windows — ALWAYS use run.ps1 via PowerShell, even inside Git Bash.** run.ps1 handles auto-installing Python if it's missing; run.sh does not, and Git Bash on Windows often resolves `python` to the Microsoft Store stub.
-
-   On Windows (PowerShell):
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN_ROOT}/scripts/run.ps1" "${CLAUDE_PLUGIN_ROOT}/scripts/extract_text.py" "<PATH>"
-   ```
-
-   On macOS / Linux:
-   ```bash
-   "${CLAUDE_PLUGIN_ROOT}/scripts/run.sh" "${CLAUDE_PLUGIN_ROOT}/scripts/extract_text.py" "<PATH>"
-   ```
-
-Read the output carefully. The very first run on a given machine will take an extra ~30 seconds (or up to ~2 minutes on Windows if Python isn't installed yet — run.ps1 will download and install it silently) while the plugin sets up its Python environment and installs Poppins (if missing); subsequent runs are instant.
-
-3. From the extracted text, infer:
-   - **Document title** — the main report/document name (e.g. "Google Ads Marketing Report")
-   - **Client name** — the company or person the report is for
-   - **Reporting period** — the date range covered (e.g. "1 Feb – 28 Feb, 2026")
-
-4. Tell the user: "I found the following cover details:" and show all three values. Ask them to confirm or correct any of them before proceeding.
-
-5. Once confirmed, run the polisher. (Same platform rule as step 2: Windows → run.ps1, macOS/Linux → run.sh.)
-
-   On Windows (PowerShell):
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN_ROOT}/scripts/run.ps1" "${CLAUDE_PLUGIN_ROOT}/scripts/polish_doc.py" --input "<PATH>" --title "<TITLE>" --client "<CLIENT>" --period "<PERIOD>"
-   ```
-
-   On macOS / Linux:
-   ```bash
-   "${CLAUDE_PLUGIN_ROOT}/scripts/run.sh" "${CLAUDE_PLUGIN_ROOT}/scripts/polish_doc.py" \
-     --input "<PATH>" \
-     --title "<TITLE>" \
-     --client "<CLIENT>" \
-     --period "<PERIOD>"
-   ```
-
-The polisher uses the Classic (red-header) table variant by default. Only pass `--table-style minimal` or `--table-style auto` if the user explicitly asks for a different variant.
-
-6. Parse the JSON output and report a clean summary to the user, e.g.:
-   - ✓ Cover page: "[Title]" for [Client], [Period]
-   - ✓ [N] headings restyled
-   - ✓ [N] tables restyled ([classic]/[minimal] breakdown from `detection.tables_by_variant` if both non-zero)
-   - ✓ [N] callout blocks restyled
-   - ✓ Saved to: [output path]
-
-7. Check `detection.ambiguous_paragraphs` in the JSON. If > 0, add one line:
-
-   > ⚠ Styled [N] paragraph(s) as H3 by fallback — they looked heading-like but didn't match a numbered/Roman/ALL-CAPS pattern. Review the output to confirm they're correct.
-
-   Do NOT produce a longer report; the user asked for inline notes only.
-
-## Important rules
-
-- NEVER change any text content, numbers, dates, or values in the document.
-- NEVER summarise or rewrite content.
-- ONLY apply visual brand styling.
-- If the script returns an error (especially `Content-preservation check failed`), show it clearly — that error means polishing would have altered source text, and the script aborted on purpose. Ask the user how to proceed; don't retry blindly.
-- If the script's first run fails with a "Python 3 was not found" error, tell the user to install Python 3 and try again. Do not attempt workarounds.
-  - macOS: `brew install python`
-  - Linux: use the system package manager (e.g. `sudo apt install python3 python3-venv`)
-  - Windows: this should be handled automatically by run.ps1 — if it still fails, point the user to [python.org/downloads](https://www.python.org/downloads/). IMPORTANT on Windows: if you invoked run.sh (via Git Bash) and got the "Python was not found" / Microsoft Store message, re-run through run.ps1 via PowerShell instead. run.sh does not auto-install Python; run.ps1 does.
+- Output still lands under `~/OptimindDocs/output/`, now with a third file per run: `<name>-polished-<date>.report.html`.
+- `ANTHROPIC_API_KEY` is no longer required — all LLM reasoning happens inside the user's Claude Code session via the bundled subagents.
+- The `--no-review` / `--table-style` / `--batch` flags are gone. Batch mode is now a folder path handed to `/polish`; the orchestrator loops internally.
