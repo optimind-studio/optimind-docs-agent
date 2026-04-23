@@ -4,11 +4,29 @@ Maintainer notes for editing, testing, and releasing the **Optimind Docs** Claud
 
 End-user documentation lives in [README.md](README.md). If you're here to *use* the plugin, start there.
 
+## What this repo is
+
+This repo is **both** a Claude plugin *and* a Claude marketplace that lists one plugin (this one). Two files under `.claude-plugin/` describe each role:
+
+- `.claude-plugin/plugin.json` — the plugin manifest (identity, version).
+- `.claude-plugin/marketplace.json` — the marketplace manifest that points `/plugin install` at the plugin.
+
+Colleagues install with:
+
+```
+/plugin marketplace add lqxdesign/optimind-docs
+/plugin install optimind-docs@optimind
+```
+
+(`optimind` is the marketplace name; `optimind-docs` is the plugin name inside it.)
+
 ## Repo layout (flat — Claude plugin spec)
 
 ```
 .
-├── .claude-plugin/plugin.json        ← manifest (name, version, description)
+├── .claude-plugin/
+│   ├── plugin.json                   ← plugin manifest
+│   └── marketplace.json              ← marketplace catalog (lists this plugin)
 ├── skills/polish-doc/
 │   ├── SKILL.md                      ← workflow Claude follows when invoked
 │   └── references/ui-kit.md          ← design-system spec (colors, type, variants)
@@ -65,7 +83,7 @@ Colleagues install the plugin by pointing Claude Desktop at this repo — no zip
 ### Ship an update
 
 1. Edit files under `skills/`, `scripts/`, or `assets/`.
-2. Bump `version` in [.claude-plugin/plugin.json](.claude-plugin/plugin.json) (semver: `0.2.0` → `0.3.0` for features, `0.2.0` → `0.2.1` for fixes).
+2. Bump `version` in **both** [.claude-plugin/plugin.json](.claude-plugin/plugin.json) and [.claude-plugin/marketplace.json](.claude-plugin/marketplace.json) (keep them in sync — semver: `0.2.0` → `0.3.0` for features, `0.2.0` → `0.2.1` for fixes). The marketplace bumps `metadata.version` and the matching `plugins[0].version`.
 3. Test locally (see above).
 4. Commit and push:
    ```bash

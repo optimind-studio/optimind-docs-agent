@@ -16,21 +16,24 @@ When installed, this plugin gives Claude a new skill called **`polish-doc`**. As
 
 Two ways, pick whichever your Claude Desktop supports.
 
-### Option A — Install from this GitHub repo (recommended)
+### Option A — Install from this GitHub marketplace (recommended)
 
-In Claude Desktop, run:
-
-```
-/plugin install github:hyperversity/optimind-docs
-```
-
-(Replace `hyperversity/optimind-docs` with wherever the repo actually lives if we move it.)
-
-Updates later:
+In Claude Desktop, run **both** commands:
 
 ```
-/plugin update optimind-docs
+/plugin marketplace add lqxdesign/optimind-docs
+/plugin install optimind-docs@optimind
 ```
+
+The first command registers the marketplace (one-time). The second installs the `optimind-docs` plugin from it. You can confirm the skill is available afterward with `/plugin list`.
+
+Pull later updates by running:
+
+```
+/plugin marketplace update optimind
+```
+
+Claude will refresh to the latest version on the repo's `main` branch.
 
 ### Option B — Install from `.plugin` file (offline / blocked networks)
 
@@ -89,7 +92,9 @@ Ask Claude to use `--table-style minimal` or `--table-style auto` if you want a 
 
 ```
 .
-├── .claude-plugin/plugin.json
+├── .claude-plugin/
+│   ├── plugin.json                   ← plugin manifest
+│   └── marketplace.json              ← marketplace catalog
 ├── skills/polish-doc/
 │   ├── SKILL.md                      ← the polisher workflow Claude follows
 │   └── references/ui-kit.md          ← the design-system spec (colors, type, variants)
