@@ -1,6 +1,6 @@
 # Optimind Docs UI Kit
 
-The canonical design spec for Word-doc output produced by the `/polish-doc` skill. Source of truth for tokens, text styles, frames, table variants, and callout styles.
+The canonical design spec for Word-doc output produced by the `/polish-word` skill. Source of truth for tokens, text styles, frames, table variants, and callout styles.
 
 **Figma file:** [Optimind Docs Kit](https://www.figma.com/design/iYE9CtCoxRESvSGtTrfBhs/Optimind-Docs-Kit?node-id=2501-286) — file key `iYE9CtCoxRESvSGtTrfBhs`, page `Doc`.
 

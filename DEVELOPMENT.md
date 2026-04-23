@@ -18,7 +18,7 @@ Colleagues install with (two commands, in order, then restart Claude Code):
 /plugin install optimind-docs@optimind
 ```
 
-(`optimind` is the marketplace name; `optimind-docs` is the plugin name inside it.) After install, restart Claude Code and the skill surfaces as `/polish-doc`.
+(`optimind` is the marketplace name; `optimind-docs` is the plugin name inside it.) After install, restart Claude Code and the two skills surface as `/polish-word` and `/polish-pdf`.
 
 ## Repo layout (flat — Claude plugin spec)
 
@@ -27,12 +27,16 @@ Colleagues install with (two commands, in order, then restart Claude Code):
 ├── .claude-plugin/
 │   ├── plugin.json                   ← plugin manifest
 │   └── marketplace.json              ← marketplace catalog (lists this plugin)
-├── skills/polish-doc/
-│   ├── SKILL.md                      ← workflow Claude follows when invoked
-│   └── references/ui-kit.md          ← design-system spec (colors, type, variants)
+├── skills/
+│   ├── polish-word/                  ← /polish-word skill (was /polish-doc before 0.3.0)
+│   │   ├── SKILL.md                  ← workflow Claude follows when invoked
+│   │   └── references/ui-kit.md      ← design-system spec (colors, type, variants)
+│   └── polish-pdf/                   ← /polish-pdf skill (new in 0.3.0)
+│       └── SKILL.md                  ← PDF-to-Word conversion workflow
 ├── scripts/
-│   ├── polish_doc.py                 ← core polisher
-│   ├── extract_text.py               ← cover-detail inference
+│   ├── polish_doc.py                 ← core Word polisher (filename unchanged across rename)
+│   ├── pdf_to_docx.py                ← PDF → .docx converter (pdf2docx + PyMuPDF)
+│   ├── extract_text.py               ← cover-detail inference (from a .docx)
 │   ├── install_fonts.py              ← cross-platform Poppins installer
 │   ├── run.sh                        ← launcher (macOS / Linux / Git Bash on Windows)
 │   ├── run.ps1                       ← launcher (Windows PowerShell)
@@ -46,24 +50,30 @@ Colleagues install with (two commands, in order, then restart Claude Code):
 └── .gitignore
 ```
 
+> **Heads-up — skill folder rename.** In 0.3.0 `skills/polish-doc/` became `skills/polish-word/` so the slash command (`/polish-word`) pairs cleanly with the new `/polish-pdf`. The underlying polisher script keeps its historical filename (`polish_doc.py`) — it's an internal detail only referenced from inside this repo, and renaming it would just add churn.
+
 Everything above is the plugin. No nested `optimind-docs/` folder — the manifest lives at the repo root, which is what `/plugin install github:…` expects.
 
 ## Edit map
 
 | Change | File |
 |---|---|
-| Workflow Claude follows | [skills/polish-doc/SKILL.md](skills/polish-doc/SKILL.md) |
-| Design-system tokens (colors, type, variants) | [skills/polish-doc/references/ui-kit.md](skills/polish-doc/references/ui-kit.md) |
+| `/polish-word` workflow Claude follows | [skills/polish-word/SKILL.md](skills/polish-word/SKILL.md) |
+| `/polish-pdf` workflow Claude follows | [skills/polish-pdf/SKILL.md](skills/polish-pdf/SKILL.md) |
+| Design-system tokens (colors, type, variants) | [skills/polish-word/references/ui-kit.md](skills/polish-word/references/ui-kit.md) |
 | Polisher logic (.docx transformations) | [scripts/polish_doc.py](scripts/polish_doc.py) |
-| Cover detail inference | [scripts/extract_text.py](scripts/extract_text.py) |
+| PDF → .docx conversion logic | [scripts/pdf_to_docx.py](scripts/pdf_to_docx.py) |
+| Cover detail inference (from a .docx) | [scripts/extract_text.py](scripts/extract_text.py) |
 | First-run font / venv bootstrap | [scripts/run.sh](scripts/run.sh) and [scripts/run.ps1](scripts/run.ps1) |
 | Cross-platform font installer | [scripts/install_fonts.py](scripts/install_fonts.py) |
 | Plugin manifest + version | [.claude-plugin/plugin.json](.claude-plugin/plugin.json) |
+| Marketplace manifest + version | [.claude-plugin/marketplace.json](.claude-plugin/marketplace.json) |
 
 ## Test a local change
 
 The plugin has a self-bootstrapping launcher. From the repo root:
 
+**Word polisher:**
 ```bash
 scripts/run.sh scripts/polish_doc.py \
   --input  "/path/to/some.docx" \
@@ -72,7 +82,15 @@ scripts/run.sh scripts/polish_doc.py \
   --period "1 Jan – 31 Mar, 2026"
 ```
 
-First call creates a private venv under `.venv/` (~30 s) and installs Poppins into your user font folder if missing; later calls are instant. Output lands in `~/OptimindDocs/output/`.
+**PDF → .docx converter:**
+```bash
+scripts/run.sh scripts/pdf_to_docx.py \
+  --input  "/path/to/source.pdf" \
+  --output "$HOME/OptimindDocs/input/source.docx"
+# Prints JSON: {pages, tables_detected, images_detected, output_path, text_char_count}
+```
+
+First call creates a private venv under `.venv/` (~30 s) and installs Poppins into your user font folder if missing; later calls are instant. Polisher output lands in `~/OptimindDocs/output/`; converter output lands wherever `--output` points (convention: `~/OptimindDocs/input/` so `/polish-word` picks it up next).
 
 On Windows PowerShell, use `scripts\run.ps1` instead.
 
@@ -121,7 +139,7 @@ Tokens mirror the Optimind Docs Kit Figma file:
 [Optimind Docs Kit](https://www.figma.com/design/iYE9CtCoxRESvSGtTrfBhs/Optimind-Docs-Kit), page `Doc`.
 
 If Figma tokens change, update **both**:
-- [skills/polish-doc/references/ui-kit.md](skills/polish-doc/references/ui-kit.md) — what Claude reads at runtime.
+- [skills/polish-word/references/ui-kit.md](skills/polish-word/references/ui-kit.md) — what Claude reads at runtime.
 - The `RGBColor` constants at the top of [scripts/polish_doc.py](scripts/polish_doc.py) — what the polisher actually applies.
 
 Keep them in sync; Claude uses the markdown to reason about edge cases, and the Python constants for rendering.

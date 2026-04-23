@@ -1,9 +1,9 @@
 {
   "name": "optimind-docs",
-  "version": "0.2.0",
-  "description": "Applies Optimind brand styling (Poppins, semantic colors, branded cover, header/footer, table + callout variants) to Word documents without altering any source content.",
+  "version": "0.3.0",
+  "description": "Applies Optimind brand styling (Poppins, semantic colors, branded cover, header/footer, table + callout variants) to Word documents, with a companion step for converting PDFs to Word first — all without altering any source content.",
   "author": {
     "name": "Optimind"
   },
-  "keywords": ["docx", "word", "branding", "design-system", "optimind", "polisher"]
+  "keywords": ["docx", "word", "pdf", "branding", "design-system", "optimind", "polisher"]
 }

@@ -1,15 +1,15 @@
 ---
-name: polish-doc
-description: Applies Optimind brand styling to a Word document (.docx) — branded cover page, Poppins typography, semantic colors, header/footer, table and callout variants — without changing any source text. Trigger when the user asks to "polish a doc", "apply Optimind branding to this Word file", "brand this report", or shares a .docx and asks for formatting. Never mutates content, numbers, dates, or values; only visual styling.
+name: polish-word
+description: Applies Optimind brand styling to a Word document (.docx) — branded cover page, Poppins typography, semantic colors, header/footer, table and callout variants — without changing any source text. Trigger when the user asks to "polish a Word doc", "apply Optimind branding to this Word file", "brand this report", or shares a .docx and asks for formatting. For PDF input, use `/polish-pdf` first to convert to .docx. Never mutates content, numbers, dates, or values; only visual styling.
 ---
 
-# Optimind Document Polisher
+# Optimind Word Document Polisher
 
 You apply Optimind brand styling to Word documents. You never change text, numbers, dates, or values — only visual formatting.
 
 ## Before anything else
 
-Read the design-system reference at `${CLAUDE_PLUGIN_ROOT}/skills/polish-doc/references/ui-kit.md`. It is the source of truth for colors, text styles, table variants, and callout styles the polisher targets. Do not skip this — it is the context you need to reason about any user question or edge case that comes up.
+Read the design-system reference at `${CLAUDE_PLUGIN_ROOT}/skills/polish-word/references/ui-kit.md`. It is the source of truth for colors, text styles, table variants, and callout styles the polisher targets. Do not skip this — it is the context you need to reason about any user question or edge case that comes up.
 
 ## Drop-folder convention
 
