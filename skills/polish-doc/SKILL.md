@@ -26,17 +26,19 @@ The first run of this skill creates both folders automatically. If the user give
 
 2. Once you have the path, extract the text to infer cover details.
 
-   On macOS / Linux / Git Bash (Windows):
-   ```bash
-   "${CLAUDE_PLUGIN_ROOT}/scripts/run.sh" "${CLAUDE_PLUGIN_ROOT}/scripts/extract_text.py" "<PATH>"
-   ```
+   **On Windows — ALWAYS use run.ps1 via PowerShell, even inside Git Bash.** run.ps1 handles auto-installing Python if it's missing; run.sh does not, and Git Bash on Windows often resolves `python` to the Microsoft Store stub.
 
-   On Windows PowerShell:
+   On Windows (PowerShell):
    ```powershell
    powershell -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN_ROOT}/scripts/run.ps1" "${CLAUDE_PLUGIN_ROOT}/scripts/extract_text.py" "<PATH>"
    ```
 
-Read the output carefully. The very first run on a given machine will take an extra ~30 seconds while the plugin sets up its Python environment and installs Poppins (if missing); subsequent runs are instant.
+   On macOS / Linux:
+   ```bash
+   "${CLAUDE_PLUGIN_ROOT}/scripts/run.sh" "${CLAUDE_PLUGIN_ROOT}/scripts/extract_text.py" "<PATH>"
+   ```
+
+Read the output carefully. The very first run on a given machine will take an extra ~30 seconds (or up to ~2 minutes on Windows if Python isn't installed yet — run.ps1 will download and install it silently) while the plugin sets up its Python environment and installs Poppins (if missing); subsequent runs are instant.
 
 3. From the extracted text, infer:
    - **Document title** — the main report/document name (e.g. "Google Ads Marketing Report")
@@ -45,20 +47,20 @@ Read the output carefully. The very first run on a given machine will take an ex
 
 4. Tell the user: "I found the following cover details:" and show all three values. Ask them to confirm or correct any of them before proceeding.
 
-5. Once confirmed, run the polisher.
+5. Once confirmed, run the polisher. (Same platform rule as step 2: Windows → run.ps1, macOS/Linux → run.sh.)
 
-   On macOS / Linux / Git Bash (Windows):
+   On Windows (PowerShell):
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN_ROOT}/scripts/run.ps1" "${CLAUDE_PLUGIN_ROOT}/scripts/polish_doc.py" --input "<PATH>" --title "<TITLE>" --client "<CLIENT>" --period "<PERIOD>"
+   ```
+
+   On macOS / Linux:
    ```bash
    "${CLAUDE_PLUGIN_ROOT}/scripts/run.sh" "${CLAUDE_PLUGIN_ROOT}/scripts/polish_doc.py" \
      --input "<PATH>" \
      --title "<TITLE>" \
      --client "<CLIENT>" \
      --period "<PERIOD>"
-   ```
-
-   On Windows PowerShell:
-   ```powershell
-   powershell -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN_ROOT}/scripts/run.ps1" "${CLAUDE_PLUGIN_ROOT}/scripts/polish_doc.py" --input "<PATH>" --title "<TITLE>" --client "<CLIENT>" --period "<PERIOD>"
    ```
 
 The polisher uses the Classic (red-header) table variant by default. Only pass `--table-style minimal` or `--table-style auto` if the user explicitly asks for a different variant.
@@ -82,4 +84,7 @@ The polisher uses the Classic (red-header) table variant by default. Only pass `
 - NEVER summarise or rewrite content.
 - ONLY apply visual brand styling.
 - If the script returns an error (especially `Content-preservation check failed`), show it clearly — that error means polishing would have altered source text, and the script aborted on purpose. Ask the user how to proceed; don't retry blindly.
-- If the script's first run fails with a "Python 3 was not found" error, tell the user to install Python 3 (e.g. via Homebrew: `brew install python`) and try again. Do not attempt workarounds.
+- If the script's first run fails with a "Python 3 was not found" error, tell the user to install Python 3 and try again. Do not attempt workarounds.
+  - macOS: `brew install python`
+  - Linux: use the system package manager (e.g. `sudo apt install python3 python3-venv`)
+  - Windows: this should be handled automatically by run.ps1 — if it still fails, point the user to [python.org/downloads](https://www.python.org/downloads/). IMPORTANT on Windows: if you invoked run.sh (via Git Bash) and got the "Python was not found" / Microsoft Store message, re-run through run.ps1 via PowerShell instead. run.sh does not auto-install Python; run.ps1 does.

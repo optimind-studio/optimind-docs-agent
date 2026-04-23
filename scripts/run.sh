@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Optimind Docs plugin launcher (macOS / Linux / Git Bash on Windows).
+# Optimind Docs plugin launcher (macOS / Linux).
 # On first run: creates a plugin-private venv, installs Python deps, and
 # installs the Poppins font family if it's missing from the system.
 # On subsequent runs: verifies fonts (skips if present) and execs the bundled
 # venv's python with whatever args were passed.
+#
+# Windows users: use run.ps1 instead — it handles auto-install of Python.
 #
 # Usage:
 #   run.sh <path-to-python-script.py> [args...]
@@ -15,33 +17,37 @@ VENV="$PLUGIN_ROOT/.venv"
 REQS="$PLUGIN_ROOT/scripts/requirements.txt"
 STAMP="$VENV/.deps-installed"
 FONTS_SRC="$PLUGIN_ROOT/assets/fonts"
-
-# Windows (Git Bash / MSYS / Cygwin) puts the venv python under Scripts/, not bin/.
-case "${OSTYPE:-}" in
-  msys*|cygwin*|win32*)
-    VENV_PY="$VENV/Scripts/python.exe"
-    ;;
-  *)
-    VENV_PY="$VENV/bin/python"
-    ;;
-esac
+VENV_PY="$VENV/bin/python"
 
 # Ensure user-facing drop folders exist (first-run convenience).
 mkdir -p "$HOME/OptimindDocs/input" "$HOME/OptimindDocs/output"
 
-# Pick a python3 interpreter (macOS 12+ ships python3; Windows users install from python.org).
-PY_BIN="${OPTIMIND_DOCS_PYTHON:-}"
-if [ -z "$PY_BIN" ]; then
-  if command -v python3 >/dev/null 2>&1; then
-    PY_BIN="python3"
-  elif command -v python >/dev/null 2>&1; then
-    PY_BIN="python"
-  else
-    cat >&2 <<ERR
-{"error": "Python 3 was not found on this machine. Install it (macOS: 'brew install python'; Windows: download from python.org and check 'Add Python to PATH'), then try again."}
-ERR
-    exit 127
+# Returns 0 if the given command is a usable Python 3 (not the Windows
+# "Microsoft Store" stub and not a Python 2), 1 otherwise.
+is_real_python3() {
+  local candidate="$1"
+  [ -z "$candidate" ] && return 1
+  command -v "$candidate" >/dev/null 2>&1 || return 1
+  local version_output
+  version_output="$("$candidate" --version 2>&1 || true)"
+  # Real Python 3 prints "Python 3.X.Y". The MS Store stub prints
+  # "Python was not found...". Python 2 prints "Python 2.X.Y".
+  [[ "$version_output" =~ ^Python\ 3\.[0-9]+ ]]
+}
+
+PY_BIN=""
+for candidate in "${OPTIMIND_DOCS_PYTHON:-}" python3 python; do
+  if is_real_python3 "$candidate"; then
+    PY_BIN="$candidate"
+    break
   fi
+done
+
+if [ -z "$PY_BIN" ]; then
+  cat >&2 <<ERR
+{"error": "Python 3 was not found on this machine. Install it (macOS: 'brew install python'; Linux: use your package manager, e.g. 'sudo apt install python3 python3-venv'), then try again."}
+ERR
+  exit 127
 fi
 
 # First-run: create venv + install deps.

@@ -58,15 +58,17 @@ Once installed, the `/polish-doc` skill is available.
 
 ### Requirements
 
-- **macOS or Windows** (Linux also works).
-- **Python 3** on your `PATH`.
-  - macOS: usually preinstalled. If not, `brew install python`.
-  - Windows: download from [python.org](https://www.python.org/downloads/) and tick **"Add Python to PATH"** during install.
+- **macOS, Windows, or Linux.**
+- **Python 3.**
+  - **Windows: nothing to install.** On first run, the plugin silently downloads Python 3.12 from python.org and does a per-user install (no admin required). Takes ~1–2 minutes on first run. If you already have Python 3 installed, it's detected and reused.
+  - **macOS:** usually preinstalled. If not, `brew install python`.
+  - **Linux:** use your package manager, e.g. `sudo apt install python3 python3-venv`.
 
 That's it. On first run the plugin:
 
-1. Creates its own isolated Python environment and installs its libraries (`python-docx`, `docxtpl`, `lxml`) — takes ~30 seconds.
-2. Installs the **Poppins** font family into your user font folder **only if it's not already on your system** (checked across `~/Library/Fonts`, `/Library/Fonts`, and `/System/Library/Fonts` on macOS; `%LOCALAPPDATA%\Microsoft\Windows\Fonts` and `C:\Windows\Fonts` on Windows; `~/.local/share/fonts` and `/usr/share/fonts` on Linux). No admin rights needed.
+1. (Windows only, if needed) downloads and silently installs Python 3.12 from python.org — per-user, no admin required.
+2. Creates its own isolated Python environment and installs its libraries (`python-docx`, `docxtpl`, `lxml`) — takes ~30 seconds.
+3. Installs the **Poppins** font family into your user font folder **only if it's not already on your system** (checked across `~/Library/Fonts`, `/Library/Fonts`, and `/System/Library/Fonts` on macOS; `%LOCALAPPDATA%\Microsoft\Windows\Fonts` and `C:\Windows\Fonts` on Windows; `~/.local/share/fonts` and `/usr/share/fonts` on Linux). No admin rights needed.
 
 Every run after that is instant.
 
