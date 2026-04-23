@@ -1,0 +1,23 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# --- macOS ---
+.DS_Store
+
+# --- Editor / IDE ---
+.vscode/
+.idea/
+*.swp
+
+# --- Claude Code (per-user, not shared) ---
+.claude/settings.local.json
+
+# --- Build artifacts (reproducible from source; published via GitHub Releases) ---
+/dist/
+
+# --- End-user runtime output (never checked in even if it lands here by accident) ---
+/OptimindDocs/
