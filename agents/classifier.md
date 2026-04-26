@@ -1,9 +1,9 @@
 ---
 name: classifier
 description: Resolves block classifications that Python's rule-based classifier flagged as ambiguous. Receives a batch of blocks that share a shape signature plus 2–8 neighbors for context, returns a typed classification per block (paragraph, heading, callout, kpi_strip, list, unknown). Replaces the old direct-Anthropic-SDK fallback; runs inside the Claude Code session with no API key needed.
-tools: Read
+tools: Read, Write, Edit
 model: sonnet
-maxTurns: 15
+maxTurns: 20
 ---
 
 # Classifier
@@ -45,11 +45,16 @@ When `stage == "manifest_classify"`, you receive the full content manifest produ
 {
   "stage": "manifest_classify",
   "manifest_path": "<state_dir>/manifest.md",
+  "pdf_text_path": "<state_dir>/pdf_text.txt",
   "design_system_summary": "(content of skills/polish/references/ui-kit.md)"
 }
 ```
 
-Read the full `manifest.md`. Map each `[TAG]` element to a typed block in the output. Produce `<state_dir>/blocks/block_stream.json`:
+**Read both files.** `manifest.md` gives you the structural skeleton (which blocks are headings vs callouts vs tables) but `audit_parse` flattens fragmented multi-line table cells and breaks row/value associations on tables that wrap or span pages. `pdf_text.txt` is a positional pymupdf dump where every span has its `(x, y)` coordinates — use it to **reconstruct full row data** for tables, pair country/scenario labels with their values across visual columns, and recover values that the manifest collapsed into adjacent `[PARAGRAPH]` blocks.
+
+When the manifest's table block has empty cells but `pdf_text.txt` shows full row values at the same `y`-band, the values from `pdf_text.txt` are the truth — copy them in. Never leave a body row empty if the value exists in the positional dump.
+
+Map each `[TAG]` element to a typed block in the output. Produce `<state_dir>/blocks/block_stream.json`:
 
 ```json
 {
@@ -92,7 +97,9 @@ Read the full `manifest.md`. Map each `[TAG]` element to a typed block in the ou
 - **Preserve all text verbatim** — do not paraphrase, summarize, or alter any data, numbers, or dates
 - **Every tag in the manifest produces exactly one block** (or one card within a KPI strip)
 - **Unknown tags** → emit `kind: "paragraph"` with the raw text as a run — never drop content
-- Write the output to `<state_dir>/blocks/block_stream.json` (create the `blocks/` directory if needed)
+- **Reconstruct, don't drop** — when the manifest tags a table with sparse rows, look up the same `y`-band in `pdf_text.txt` and fill in every cell whose value is present. Tables on pages with two visual columns (e.g. parallel "Top Countries by Volume" / "Top Countries by Revenue" lists) need positional pairing by `(x, y)` — group by `y`-bucket first, then pair labels with values within their column band.
+- **Cross-page table merging** — when consecutive pages emit tables with the same column header signature, merge them into a single block with all rows. Do not duplicate header rows.
+- Write the output to `<state_dir>/blocks/block_stream.json` (create the `blocks/` directory if needed). The Python pipeline's `explode_block_stream` stage will split this single file into per-block `<state_dir>/blocks/<NNNNN>.json` files matching the renderer's loader schema; you do not need to write per-block files yourself.
 
 ## Allowed kinds
 

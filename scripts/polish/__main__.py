@@ -29,12 +29,16 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import pickle
 import sys
 import time
 import traceback
 from dataclasses import asdict
 from pathlib import Path
+from typing import Any
+
+log = logging.getLogger(__name__)
 
 from . import audit_parse as audit_parse_mod
 from . import chart_extract as chart_mod
@@ -83,6 +87,8 @@ def _dispatch_stage(stage: str, state_dir: Path, *, resume: bool) -> int:
         return _stage_parse(state_dir)
     if stage == "audit_parse":
         return _stage_audit_parse(state_dir)
+    if stage == "explode_block_stream":
+        return _stage_explode_block_stream(state_dir)
     if stage == "classify":
         return _stage_classify(state_dir, resume=resume)
     if stage == "refine":
@@ -108,7 +114,8 @@ def _dispatch_stage(stage: str, state_dir: Path, *, resume: bool) -> int:
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     p = argparse.ArgumentParser(prog="polish", description="Optimind Docs polisher — stage machine")
     p.add_argument("--stage", required=True, choices=(
-        "init", "parse", "audit_parse", "classify", "refine", "chart_extract",
+        "init", "parse", "audit_parse", "explode_block_stream",
+        "classify", "refine", "chart_extract",
         "ds_extend", "render", "verify", "promote", "report",
     ))
     p.add_argument("--state-dir", default=None, help="State bundle dir (required for every stage except init)")
@@ -196,9 +203,172 @@ def _stage_audit_parse(state_dir: Path) -> int:
     st = state_mod.load_state(state_dir)
     input_path = Path(st["input_path"])
     manifest_path = audit_parse_mod.produce_manifest(input_path, state_dir)
+
+    # PDF inputs additionally get a positional pymupdf text dump alongside
+    # the manifest. The classifier's manifest_classify mode reads this for
+    # high-fidelity row/value pairing in tables (manifest.md alone collapses
+    # multi-line cells and breaks row associations on wrapped tables).
+    pdf_text_path: Path | None = None
+    if st.get("format") == "pdf":
+        try:
+            pdf_text_path = audit_parse_mod.write_pdf_positional_text(
+                input_path, state_dir,
+            )
+        except Exception as exc:  # noqa: BLE001
+            log.exception("audit_parse: positional dump failed (non-fatal)")
+            state_mod.add_warning(
+                state_dir,
+                f"audit_parse: pdf_text.txt dump failed — manifest.md only "
+                f"({type(exc).__name__})",
+            )
+
     state_mod.advance_stage(state_dir, "audit_parse_complete")
-    print(json.dumps({"stage": "audit_parse_complete", "manifest": str(manifest_path)}))
+    out: dict[str, Any] = {"stage": "audit_parse_complete", "manifest": str(manifest_path)}
+    if pdf_text_path is not None:
+        out["pdf_text"] = str(pdf_text_path)
+    print(json.dumps(out))
     return 0
+
+
+def _stage_explode_block_stream(state_dir: Path) -> int:
+    """Split a single block_stream.json (PDF manifest_classify output) into
+    per-block JSON files matching the renderer's loader schema.
+
+    The classifier's manifest_classify mode writes one file at
+    ``blocks/block_stream.json`` containing ``{stage, blocks: [{kind, ...flat fields}]}``,
+    but the renderer iterates ``blocks/<NNNNN>.json`` files with the schema
+    ``{kind, content: {<kind-specific fields>}}``. Without this stage the
+    renderer would silently iterate zero blocks and produce a cover-only docx.
+
+    No-op for runs that don't produce block_stream.json (the docx flow uses
+    classify_mod.classify which writes per-block files directly).
+    """
+    src = state_dir / "blocks" / "block_stream.json"
+    if not src.exists():
+        # docx flow or no manifest_classify run — nothing to do.
+        print(json.dumps({"stage": "explode_block_stream_skipped",
+                          "reason": "no block_stream.json present"}))
+        return 0
+
+    try:
+        data = json.loads(src.read_text())
+    except json.JSONDecodeError as exc:
+        _hard_fail(f"explode_block_stream: invalid JSON — {exc}")
+        return 2
+
+    blocks_in = data.get("blocks") or []
+    if not isinstance(blocks_in, list):
+        _hard_fail("explode_block_stream: 'blocks' must be a list")
+        return 2
+
+    blocks_dir = state_dir / "blocks"
+    blocks_dir.mkdir(parents=True, exist_ok=True)
+    # Wipe any existing per-block files (idempotent re-runs).
+    for f in blocks_dir.glob("[0-9]*.json"):
+        f.unlink()
+
+    written = 0
+    for i, block in enumerate(blocks_in):
+        if not isinstance(block, dict) or "kind" not in block:
+            state_mod.add_warning(
+                state_dir,
+                f"explode_block_stream: block {i} missing 'kind' — skipped",
+            )
+            continue
+        payload = _block_stream_to_per_block(block)
+        (blocks_dir / f"{i:05d}.json").write_text(
+            json.dumps(payload, indent=2, default=str)
+        )
+        written += 1
+
+    state_mod.advance_stage(state_dir, "explode_block_stream_complete")
+    print(json.dumps({
+        "stage": "explode_block_stream_complete",
+        "block_count": written,
+        "source": str(src),
+    }))
+    return 0
+
+
+# Per-kind keys the renderer's loader expects under `content`. Anything not
+# listed is dropped (defensive — keeps the schema stable).
+_BLOCK_CONTENT_KEYS: dict[str, tuple[str, ...]] = {
+    "heading":          ("level", "text"),
+    "section_label":    ("text", "number"),
+    "paragraph":        ("runs",),
+    "list":             ("items",),
+    "table":            ("headers", "rows", "variant", "merges", "caption"),
+    "kpi_strip":        ("cards",),
+    "callout":          ("variant", "label", "body"),
+    "action_card":      ("number", "title", "body"),
+    "comparison_panel": ("left_title", "left_items", "right_title", "right_items"),
+    "figure":           ("image_format", "caption", "alt"),
+    "chart":            ("kind", "title", "categories", "series",
+                         "extraction_strategy", "extraction_confidence"),
+}
+
+
+def _normalize_runs(items: list | None) -> list[dict]:
+    if not items:
+        return []
+    out: list[dict] = []
+    for r in items:
+        if isinstance(r, str):
+            out.append({"text": r, "bold": False, "italic": False})
+        else:
+            out.append({
+                "text": r.get("text", ""),
+                "bold": bool(r.get("bold", False)),
+                "italic": bool(r.get("italic", False)),
+            })
+    return out
+
+
+def _block_stream_to_per_block(block: dict) -> dict:
+    """Lift kind-specific fields under a `content` key matching the loader's
+    expectations. Strings, numbers and lists pass through; runs are normalised.
+    """
+    kind = block["kind"]
+    keys = _BLOCK_CONTENT_KEYS.get(kind, ())
+    content: dict[str, Any] = {}
+
+    for k in keys:
+        if k not in block:
+            continue
+        v = block[k]
+        # Normalise run lists wherever they appear.
+        if k == "runs":
+            content[k] = _normalize_runs(v)
+        elif k == "items" and kind == "list":
+            ordered_default = block.get("style") == "numbered"
+            content[k] = [
+                {
+                    "runs": _normalize_runs(it.get("runs") if isinstance(it, dict) else None),
+                    "level": int(it.get("level", 0)) if isinstance(it, dict) else 0,
+                    "ordered": bool(it.get("ordered", ordered_default))
+                                if isinstance(it, dict) else ordered_default,
+                }
+                for it in (v or [])
+            ]
+        elif k == "body" and kind == "callout":
+            # Callout body is a list of paragraph dicts.
+            content[k] = [
+                {"runs": _normalize_runs(p.get("runs") if isinstance(p, dict) else None)}
+                for p in (v or [])
+            ]
+        elif k == "cards" and kind == "kpi_strip":
+            content[k] = [
+                {
+                    "value": (c.get("value", "") if isinstance(c, dict) else ""),
+                    "label": (c.get("label", "") if isinstance(c, dict) else ""),
+                    "delta": (c.get("delta") if isinstance(c, dict) else None),
+                }
+                for c in (v or [])
+            ]
+        else:
+            content[k] = v
+
+    return {"kind": kind, "content": content}
 
 
 def _parse_out(state_dir: Path) -> Path:

@@ -5,27 +5,36 @@ The Python pipeline decomposes into named stages. The skill drives the machine; 
 ## Stages
 
 ```
-intake          (handled by the Intake subagent — no Python run)
+intake               (handled by the Intake subagent — no Python run)
   ↓
-parse           python -m polish --stage parse --state-dir <dir>
+parse                python -m polish --stage parse --state-dir <dir>
   ↓
-classify        python -m polish --stage classify --state-dir <dir>
+audit_parse          (PDF only) python -m polish --stage audit_parse --state-dir <dir>
+                     emits manifest.md + pdf_text.txt
+  ↓
+manifest_classify    (PDF only) skill invokes Classifier in manifest_classify mode
+                     — agent reads manifest.md + pdf_text.txt, writes blocks/block_stream.json
+  ↓
+explode_block_stream (PDF only) python -m polish --stage explode_block_stream --state-dir <dir>
+                     — splits block_stream.json into per-block <NNNNN>.json files
+  ↓
+classify             (docx only) python -m polish --stage classify --state-dir <dir>
   ↓ (may emit handoffs — skill loops classify with --resume)
-refine          python -m polish --stage refine --state-dir <dir>
+refine               (docx only) python -m polish --stage refine --state-dir <dir>
   ↓
-chart_extract   python -m polish --stage chart_extract --state-dir <dir>
+chart_extract        (docx only) python -m polish --stage chart_extract --state-dir <dir>
   ↓ (may emit handoffs — skill loops)
-ds_extend       (skill invokes DS-Extender for anything in pending/ds_extend/)
+ds_extend            (skill invokes DS-Extender for anything in pending/ds_extend/)
   ↓
-render          python -m polish --stage render --state-dir <dir>
+render               python -m polish --stage render --state-dir <dir>
   ↓
-audit           (skill invokes Auditor)
+audit                (skill invokes Auditor)
   ↓
-qa              (skill invokes Renderer-QA; Renderer-QA internally runs python -m polish --stage verify)
-  ↓ (if retry: loop back to render | classify | ds_extend | chart_extract)
-promote         python -m polish --stage promote --state-dir <dir>
+qa                   (skill invokes Renderer-QA; Renderer-QA internally runs python -m polish --stage verify)
+  ↓ (if retry: loop back to render | classify | ds_extend | chart_extract | explode_block_stream)
+promote              python -m polish --stage promote --state-dir <dir>
   ↓
-report          python -m polish --stage report --state-dir <dir>
+report               python -m polish --stage report --state-dir <dir>
 ```
 
 ## Exit codes

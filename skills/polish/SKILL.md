@@ -32,9 +32,12 @@ The first run of this skill creates these folders automatically. Absolute paths 
 ```
 1. Ask for a path (or use $ARGUMENTS)          → Intake agent
 2. python -m polish --stage parse              → canonical block model on disk
-3. python -m polish --stage classify           → pending/classify/ may appear → Classifier agent
-4. python -m polish --stage refine             → deterministic, no handoffs
-5. python -m polish --stage chart_extract      → pending/chart_infer/ may appear → Classifier agent (batch)
+2b. (PDF only) python -m polish --stage audit_parse  → manifest.md + pdf_text.txt
+2c. (PDF only) Classifier agent — manifest_classify mode → blocks/block_stream.json
+2d. (PDF only) python -m polish --stage explode_block_stream → splits into per-block files
+3. (docx only) python -m polish --stage classify  → pending/classify/ may appear → Classifier agent
+4. (docx only) python -m polish --stage refine    → deterministic, no handoffs
+5. (docx only) python -m polish --stage chart_extract → pending/chart_infer/ may appear → Classifier (batch)
 6. pending/ds_extend/ may appear               → DS-Extender agent (one invocation per signature group)
 7. python -m polish --stage render             → writes the .docx to staged output
 8. Auditor agent                                → sampling-based QA findings
@@ -97,9 +100,23 @@ For PDF inputs, run the manifest producer immediately after parse. Skip this ste
   --state-dir "${user_config.state_dir}/<run_id>"
 ```
 
-This writes `<state_dir>/manifest.md` — a structured, human+LLM-readable description of every element in the document with all data verbatim.
+This writes two companion files:
+- `<state_dir>/manifest.md` — a structured, human+LLM-readable description of every element in the document with all data verbatim.
+- `<state_dir>/pdf_text.txt` — a positional pymupdf dump of every span with `(x, y)` coordinates. Required for the classifier to reconstruct full row data on tables that wrap or span pages (the manifest collapses these into adjacent paragraphs and breaks row/value associations).
 
-**After audit_parse for PDF inputs**, invoke the **classifier** agent in `manifest_classify` mode (see `agents/classifier.md` § Mode 2). The agent reads `manifest.md` and writes `<state_dir>/blocks/block_stream.json`. Then skip to Step 7 (Render) — the classify/refine/chart_extract stages are replaced by the manifest flow for PDF.
+**After audit_parse for PDF inputs**, invoke the **classifier** agent in `manifest_classify` mode (see `agents/classifier.md` § Mode 2). The agent reads BOTH `manifest.md` (for structure) AND `pdf_text.txt` (for high-fidelity row data) and writes `<state_dir>/blocks/block_stream.json`.
+
+Then run the **explode_block_stream** stage to split the single `block_stream.json` into per-block JSON files matching the renderer's loader schema:
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/scripts/run.sh" -m polish \
+  --stage explode_block_stream \
+  --state-dir "${user_config.state_dir}/<run_id>"
+```
+
+This is required — without it the renderer would silently iterate zero blocks (the loader globs `blocks/<NNNNN>.json` files, not `block_stream.json`) and produce a cover-only docx. The stage is idempotent and a no-op when `block_stream.json` doesn't exist (docx flow).
+
+After explode, skip to Step 7 (Render) — the classify/refine/chart_extract stages are replaced by the manifest flow for PDF.
 
 For `.docx` inputs, the manifest is also produced (for consistency and auditor use) but the standard classify → refine → chart_extract pipeline runs as normal.
 

@@ -1,6 +1,8 @@
 """Heading renderer — H1 with page break + divider rule, H2/H3 with spacing."""
 from __future__ import annotations
 
+from docx.oxml.ns import qn
+
 from ..model import Heading
 from . import tokens as T
 from .xml_utils import (
@@ -18,8 +20,12 @@ def render(doc_docx, heading: Heading) -> None:
     # We paint the divider on the prior paragraph so it sits above the heading
     # regardless of page breaks — matches the Figma `2550:17` layout.
     if heading.level == 1:
-        set_paragraph_page_break_before(para)
         prev = _last_paragraph_before(doc_docx, para)
+        # Skip the H1 page break when the immediately preceding paragraph already
+        # carries a page break (e.g. a section_label) — otherwise we get an
+        # orphan section_label sitting alone above a forced page break.
+        if not _has_page_break_before(prev):
+            set_paragraph_page_break_before(para)
         if prev is not None:
             set_paragraph_bottom_border(prev, T.BORDER_STR, size=T.BORDER_DEFAULT_SZ, space=6)
 
@@ -42,3 +48,12 @@ def _last_paragraph_before(doc_docx, current_para):
         if p._p is current_para._p and i > 0:
             return paras[i - 1]
     return None
+
+
+def _has_page_break_before(para) -> bool:
+    if para is None:
+        return False
+    pPr = para._p.find(qn("w:pPr"))
+    if pPr is None:
+        return False
+    return pPr.find(qn("w:pageBreakBefore")) is not None

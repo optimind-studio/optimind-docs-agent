@@ -2,6 +2,29 @@
 
 All notable changes to the Optimind Docs plugin are logged here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] — 2026-04-26
+
+PDF fidelity + layout fixes. The PDF flow now preserves table row data on first run (no more empty Sent/Delivered/Open Rate cells), section labels stop orphaning above their H1, action-card borders render as one continuous line, and table alignment matches the DS spec.
+
+### Added
+- **`explode_block_stream` stage.** New Python stage `python -m polish --stage explode_block_stream --state-dir <dir>` splits the classifier's `blocks/block_stream.json` (manifest_classify output) into per-block `blocks/<NNNNN>.json` files with the `{kind, content: {...}}` schema the renderer's loader expects. Without it the renderer iterated zero blocks and produced a cover-only docx for PDF inputs. No-op on docx flow. [scripts/polish/__main__.py](scripts/polish/__main__.py).
+- **Positional pymupdf dump.** `audit_parse` for PDF now also writes `<state_dir>/pdf_text.txt` — every span with `(x, y)` coordinates — alongside `manifest.md`. The classifier reads both: manifest for structure, pdf_text for high-fidelity row/value pairing on tables that wrap or span pages. [scripts/polish/audit_parse.py:write_pdf_positional_text](scripts/polish/audit_parse.py).
+
+### Changed
+- **Classifier agent gets `Write, Edit` tools** (was `Read` only). Required for `manifest_classify` mode to actually write `block_stream.json` instead of silently emitting it as text. [agents/classifier.md](agents/classifier.md).
+- **`section_label` renderer** now sets `pageBreakBefore` so each section starts a fresh page. [scripts/polish/render/section_label.py](scripts/polish/render/section_label.py).
+- **`heading` renderer** skips its own H1 page break when the immediately preceding paragraph already has one. Fixes the orphan-section-label / blank-page-between-sections layout. [scripts/polish/render/heading.py](scripts/polish/render/heading.py).
+- **`action_card` renderer** wraps title + body in a single 1-cell borderless table whose cell carries the brand-red left border, giving one continuous line instead of two disconnected paragraph borders separated by `space-after`. Also fixes a `'RGBColor' object has no attribute 'red'` crash on the previous border XML. [scripts/polish/render/action_card.py](scripts/polish/render/action_card.py).
+- **Table alignment** follows the DS spec: first column left, all others centered (was right-aligning numeric body columns). [scripts/polish/render/table.py:_style_cell](scripts/polish/render/table.py).
+- **`LABELS_COVER` and `LABELS_MAIN`** now have `titlecase=False` per ui-kit.md ("Labels use default casing — no uppercase transform"). Section labels and KPI card labels now preserve source casing instead of being silently title-cased. [scripts/polish/render/tokens.py](scripts/polish/render/tokens.py).
+- **Renderer-QA diagnostic rule** added: empty cells in body rows are NOT a renderer bug. The agent now picks `stage_to_retry: "classify"` (with the affected `(y, x)` coordinates from `pdf_text.txt`) when values are missing in block files but present in the positional dump, and returns `should_retry: false, hard_fail: false` (degraded) when the data is in neither source. [agents/renderer-qa.md](agents/renderer-qa.md).
+- **Skill orchestrator and state-machine reference** updated to wire `explode_block_stream` into the PDF flow between `manifest_classify` and `render`. [skills/polish/SKILL.md](skills/polish/SKILL.md), [skills/polish/references/state-machine.md](skills/polish/references/state-machine.md).
+
+### Fixed
+- PDF tables with multi-page or two-column layouts no longer drop row values. The classifier reading `pdf_text.txt` can now pair country names with volumes, scenario names with revenues, and so on — values that the manifest had collapsed into adjacent paragraph blocks.
+- Action cards no longer crash render with `AttributeError: 'RGBColor' object has no attribute 'red'`.
+- Cover-only-output bug for PDF inputs (block stream existed but renderer couldn't see it).
+
 ## [0.5.0] — 2026-04-24
 
 Ground-up architecture rebuild. **Breaking changes** across the install surface, the CLI contract, and the dependency list — upgrading 0.4.x users need to restart Claude Code, clear their cached venv, and re-read the migration notes below.

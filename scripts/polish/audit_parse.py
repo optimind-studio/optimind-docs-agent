@@ -58,6 +58,63 @@ def produce_manifest(input_path: Path, state_dir: Path) -> Path:
     return manifest_path
 
 
+def write_pdf_positional_text(input_path: Path, state_dir: Path) -> Path:
+    """Dump a positional plain-text view of every PDF page to
+    ``state_dir/pdf_text.txt``.
+
+    Why: ``manifest.md`` flattens fragmented multi-line table cells into a
+    single text blob and breaks row/value associations on tables that wrap
+    or span pages. A positional dump (one ``y``-bucket per row, sorted by
+    ``x``) preserves the row/column geometry. The classifier reads this
+    file in ``manifest_classify`` mode for high-fidelity table reconstruction.
+
+    Uses pymupdf (``fitz``) which already ships in the plugin venv.
+    """
+    import fitz  # type: ignore
+
+    out_lines: list[str] = []
+    with fitz.open(str(input_path)) as doc:
+        for pno in range(len(doc)):
+            page = doc[pno]
+            out_lines.append(f"========= PAGE {pno + 1} =========")
+
+            # Plain reading-order text first — gives narrative context the
+            # classifier needs for headings, callout bodies, action cards.
+            try:
+                out_lines.append(page.get_text("text").rstrip())
+            except Exception:
+                pass
+
+            # Then a positional dump: each span on its own line with x/y
+            # coordinates so the classifier can reconstruct multi-column
+            # tables and pair row labels with values across visual columns.
+            out_lines.append("--- positional spans (x, y, text) ---")
+            try:
+                page_dict = page.get_text("dict")
+            except Exception:
+                page_dict = {"blocks": []}
+            spans: list[tuple[float, float, str]] = []
+            for blk in page_dict.get("blocks", []):
+                if blk.get("type") != 0:
+                    continue
+                for line in blk.get("lines", []):
+                    for span in line.get("spans", []):
+                        text = (span.get("text") or "").strip()
+                        if not text:
+                            continue
+                        bbox = span.get("bbox") or (0, 0, 0, 0)
+                        spans.append((float(bbox[1]), float(bbox[0]), text))
+            spans.sort(key=lambda s: (round(s[0], 1), s[1]))
+            for y, x, text in spans:
+                out_lines.append(f"  x={x:7.1f}  y={y:7.1f}  {text}")
+            out_lines.append("")
+
+    out_path = state_dir / "pdf_text.txt"
+    out_path.write_text("\n".join(out_lines), encoding="utf-8")
+    log.info("audit_parse: positional pdf_text written → %s", out_path)
+    return out_path
+
+
 # ── PDF extraction ─────────────────────────────────────────────────────────────
 
 def _extract_pdf(path: Path) -> list[str]:

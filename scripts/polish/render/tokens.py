@@ -64,8 +64,8 @@ TEXT_COVER       = TextStyle(size=Pt(12), bold=False, color=TEXT_PRI, line_spaci
 TEXT_MAIN        = TextStyle(size=Pt(10), bold=False, color=TEXT_SEC, line_spacing=1.5)
 TEXT_TABLE       = TextStyle(size=Pt(9),  bold=False, color=TEXT_SEC, line_spacing=1.25)
 TEXT_DISCLAIMER  = TextStyle(size=Pt(8),  bold=False, color=TEXT_SEC, line_spacing=1.3)
-LABELS_COVER     = TextStyle(size=Pt(11), bold=False, color=TEXT_PRI, semibold=True, titlecase=True)
-LABELS_MAIN      = TextStyle(size=Pt(11), bold=False, color=TEXT_SEC, semibold=True, titlecase=True)
+LABELS_COVER     = TextStyle(size=Pt(11), bold=False, color=TEXT_PRI, semibold=True, titlecase=False)
+LABELS_MAIN      = TextStyle(size=Pt(11), bold=False, color=TEXT_SEC, semibold=True, titlecase=False)
 
 
 HEADING_STYLES = {

@@ -70,12 +70,22 @@ Before recommending a retry, check `retry_counter[stage_to_retry]`:
 | Symptom from verify or audit | stage_to_retry |
 |---|---|
 | Content-preservation word-count drop > 10% **excluding figure/chart blocks** | `render` |
-| Empty body, zero-row table, or missing cover | `render` |
+| Cover-only output (renderer iterated zero blocks) | `explode_block_stream` (PDF) or `classify` (docx) |
+| **Sparse table cells where the same row's values are visible in `<state_dir>/pdf_text.txt`** (PDF flow) | `classify` (re-run manifest_classify with the positional dump in scope) |
+| Sparse table cells with no values present in either `manifest.md` or `pdf_text.txt` | **upstream extraction loss — do not retry render**; mark high-severity warning, return `passed: false, should_retry: false, hard_fail: false` so the run proceeds degraded |
 | A DS-extended block rendered as empty or with a Python traceback | `ds_extend` (then `render`) |
 | Multiple Auditor findings of "misclassified — should be heading" | `classify` |
 | Chart came out as an image when an adjacent table clearly held data | `chart_extract` |
 
 Only pick ONE `stage_to_retry` — the skill handles sequencing.
+
+### Diagnostic rule: empty cells are NOT a renderer bug
+
+The renderer is deterministic over its block input. If a block file has an empty cell, the rendered docx will have an empty cell — re-running `render` cannot change that. Before recommending `stage_to_retry: "render"` for an emptiness symptom:
+
+1. Check the block file (`<state_dir>/blocks/<NNNNN>.json`) for the affected block. If the cell is empty there, the loss happened upstream — pick the upstream stage instead (`explode_block_stream`, `classify`, or `audit_parse`).
+2. Check `<state_dir>/pdf_text.txt` (PDF flow) for the same `y`-band as the table row. If the value is in the positional dump but not in the block file, the classifier missed it — set `stage_to_retry: "classify"` with retry instructions citing the affected `(y, x)` coordinates.
+3. If neither source contains the value, the data was never extractable from this PDF (rendered as a chart visual or non-text glyph in the source). Mark `passed: false, should_retry: false, hard_fail: false`. Add a high-severity warning naming the affected block indices so the user can patch the source PDF or accept the gap.
 
 ## Important: figure and chart omission is expected in v0.5
 

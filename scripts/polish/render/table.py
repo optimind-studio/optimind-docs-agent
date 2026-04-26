@@ -199,12 +199,10 @@ def _style_cell(cell, text: str, *, col_idx: int, row_idx: int,
     set_paragraph_spacing(para, before_twips=0, after_twips=0,
                           line_multiple=T.TEXT_TABLE.line_spacing)
 
-    # Alignment
-    if is_numeric_col and not is_header:
-        para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    elif true_header:
-        para.alignment = WD_ALIGN_PARAGRAPH.LEFT if col_idx == 0 else WD_ALIGN_PARAGRAPH.CENTER
-    elif col_idx == 0:
+    # Alignment — DS spec: first column left, all remaining columns centered
+    # (applies to both headers and body rows; numeric values stay centered for
+    # consistency rather than the previous right-align deviation).
+    if col_idx == 0:
         para.alignment = WD_ALIGN_PARAGRAPH.LEFT
     else:
         para.alignment = WD_ALIGN_PARAGRAPH.CENTER
