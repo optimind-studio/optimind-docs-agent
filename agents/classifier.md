@@ -94,12 +94,23 @@ Map each `[TAG]` element to a typed block in the output. Produce `<state_dir>/bl
 | `[CHART]` | `chart` | Omitted in v0.5, still emit block |
 
 **Critical rules for manifest_classify mode:**
-- **Preserve all text verbatim** — do not paraphrase, summarize, or alter any data, numbers, or dates
-- **Every tag in the manifest produces exactly one block** (or one card within a KPI strip)
-- **Unknown tags** → emit `kind: "paragraph"` with the raw text as a run — never drop content
-- **Reconstruct, don't drop** — when the manifest tags a table with sparse rows, look up the same `y`-band in `pdf_text.txt` and fill in every cell whose value is present. Tables on pages with two visual columns (e.g. parallel "Top Countries by Volume" / "Top Countries by Revenue" lists) need positional pairing by `(x, y)` — group by `y`-bucket first, then pair labels with values within their column band.
+
+- **Preserve all text verbatim** — do not paraphrase, summarize, or alter any data, numbers, or dates.
+- **Every tag in the manifest produces exactly one block** (or one card within a KPI strip).
+- **Unknown tags** → emit `kind: "paragraph"` with the raw text as a run — never drop content.
+- **Reconstruct, don't drop** — when the manifest tags a table with sparse rows, look up the same `y`-band in `pdf_text.txt` and fill in every cell whose value is present. Never leave a body row empty if the value is in the positional dump.
 - **Cross-page table merging** — when consecutive pages emit tables with the same column header signature, merge them into a single block with all rows. Do not duplicate header rows.
+- **Cover (page 1) handling.** The cover is rendered separately from `state.json` (title / client / period). On page 1, emit ONLY the body content that comes AFTER the cover meta (e.g. the "Executive Summary" H1 and its prose paragraph). Do NOT emit a giant garbled paragraph composed of cover meta strings ("DIGITAL MARKETING PERFORMANCE REPORT", report dates, channels covered, data source). If the only page-1 content is cover meta, emit nothing for that page; otherwise the cover will render twice.
+- **Letter-spaced section labels.** PDFs sometimes render section markers with character-level spacing — e.g. `"0 1  —  O V E R V I E W"`. Detect these by the pattern `\d\s*\d?\s*[—–-]\s*([A-Z]\s)+[A-Z]` (digits then spaced uppercase letters), strip the inter-letter spaces, and emit a `section_label` block: `{ "kind": "section_label", "number": "01", "text": "OVERVIEW" }`. Never emit them as paragraphs.
+- **Two-column positional pairing — concrete recipe for lists/tables that look parallel.** When a heading like *"Top Countries by Email Volume"* sits to the left of a heading like *"Top Countries by Revenue"* with values arranged in two visual columns:
+  1. Open `pdf_text.txt` for that page and find the y-band containing both heading anchors.
+  2. Within each row's y-bucket, sort spans by `x` and split into two clusters at the median x.
+  3. For column A (left), pair its labels (smallest x in cluster) with its values (larger x in same cluster). Repeat independently for column B (right).
+  4. **Do not cross clusters.** A label at `x≈92` belongs only with a value at `x≈325` on the same y-row, never with a value at `x≈611` (that one belongs to the right cluster).
+  5. Emit each cluster as its own `table` block (`Country | Volume`, `Country | Revenue`).
 - Write the output to `<state_dir>/blocks/block_stream.json` (create the `blocks/` directory if needed). The Python pipeline's `explode_block_stream` stage will split this single file into per-block `<state_dir>/blocks/<NNNNN>.json` files matching the renderer's loader schema; you do not need to write per-block files yourself.
+
+**Self-check before returning.** After writing block_stream.json, scan every `table` block: if any body row has 2+ adjacent empty cells while the corresponding y-band in `pdf_text.txt` clearly shows non-empty span text, you missed values — go back and fill them. The Python pipeline cannot recover from this; it's your job.
 
 ## Allowed kinds
 
