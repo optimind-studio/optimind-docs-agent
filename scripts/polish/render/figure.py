@@ -18,7 +18,7 @@ def render(doc_docx, figure: Figure) -> None:
     # Image paragraph
     para = doc_docx.add_paragraph()
     para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    set_paragraph_spacing(para, before_twips=120, after_twips=60, line_multiple=1.2)
+    set_paragraph_spacing(para, before_twips=240, after_twips=80, line_multiple=1.2)
 
     run = para.add_run()
     try:
@@ -35,6 +35,6 @@ def render(doc_docx, figure: Figure) -> None:
     if figure.caption:
         cap = doc_docx.add_paragraph()
         cap.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        set_paragraph_spacing(cap, after_twips=180, line_multiple=1.2)
+        set_paragraph_spacing(cap, after_twips=240, line_multiple=1.2)
         cap_run = cap.add_run(figure.caption)
         apply_text_style(cap_run, T.TEXT_DISCLAIMER, override_italic=True)

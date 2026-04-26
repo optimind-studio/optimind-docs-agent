@@ -24,25 +24,37 @@ from .xml_utils import apply_text_style, set_paragraph_spacing
 
 
 def render(doc_docx, chart: Chart) -> None:
+    # Non-data figures (logos, decorative elements) that slipped through chart
+    # extraction as kind=other — skip silently; they carry no chart data.
+    if chart.kind == "other":
+        return
+    # Charts with no usable data should not produce a blank image frame.
+    has_values = any(s.values for s in chart.series)
+    if not chart.categories or not has_values:
+        return
+
     png = _render_png(chart)
     if png is None:
-        _render_unavailable(doc_docx, chart, reason="matplotlib render failed")
-        return
+        return  # skip silently — no broken placeholders in the doc
 
     # Title (above image, branded)
     if chart.title:
         tp = doc_docx.add_paragraph()
         tp.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        set_paragraph_spacing(tp, before_twips=120, after_twips=60, line_multiple=1.25)
+        set_paragraph_spacing(tp, before_twips=240, after_twips=60, line_multiple=1.25)
         trun = tp.add_run(chart.title)
         apply_text_style(trun, T.TITLES_SUB)
 
     # Centered image
     p = doc_docx.add_paragraph()
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    set_paragraph_spacing(p, before_twips=60, after_twips=120, line_multiple=1.0)
+    set_paragraph_spacing(p, before_twips=60, after_twips=240, line_multiple=1.0)
     run = p.add_run()
-    run.add_picture(BytesIO(png), width=Inches(6.2))
+    try:
+        run.add_picture(BytesIO(png), width=Inches(6.2))
+    except Exception:
+        # Remove the empty paragraph we just added, skip silently.
+        p._element.getparent().remove(p._element)
 
 
 def _render_png(chart: Chart) -> bytes | None:

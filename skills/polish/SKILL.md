@@ -1,6 +1,10 @@
 ---
 name: polish
-description: One command for rebuilding Word or PDF reports as fully branded Optimind documents. Auto-detects .docx vs .pdf, orchestrates five subagents (Intake, Auditor, Classifier, DS-Extender, Renderer-QA), extends the design system via Figma round-trip when novel elements appear, and auto-retries on QA failure. Source text, numbers, dates, and values are preserved verbatim. Trigger when the user asks to "polish", "brand", or "rebrand" a Word doc or PDF, or shares a .docx / .pdf and asks for formatting. Handles single files or folders.
+description: Rebuild a Word or PDF report as a fully branded Optimind document. Pass a .docx/.pdf file path or a folder of files.
+when_to_use: When the user asks to "polish", "brand", or "rebrand" a Word doc or PDF, shares a .docx or .pdf and asks for formatting, or provides a folder path to batch-polish multiple reports.
+argument-hint: "[file-or-folder]"
+disable-model-invocation: true
+allowed-tools: Bash Read Write Edit Agent
 ---
 
 # /polish — Optimind document polisher
@@ -15,11 +19,11 @@ Also read `${CLAUDE_PLUGIN_ROOT}/skills/polish/references/handoff-protocol.md` a
 
 ## Drop-folder convention
 
-User-facing files live under `~/OptimindDocs/`:
+User-facing files live under the configured output/state directories (set at plugin install time):
 
-- `~/OptimindDocs/input/` — drop files here
-- `~/OptimindDocs/output/` — polished `.docx` + `.classification.json` + `.report.html` land here
-- `~/OptimindDocs/.polish-state/<run-id>/` — durable state bundle for each run (safe to delete after the run)
+- `${user_config.output_dir}/` — polished `.docx` + `.classification.json` + `.report.html` land here (default: `~/OptimindDocs/output`)
+- `${user_config.state_dir}/<run-id>/` — durable state bundle for each run (safe to delete after the run; default: `~/OptimindDocs/.polish-state`)
+- `~/OptimindDocs/input/` — optional drop folder for source files
 
 The first run of this skill creates these folders automatically. Absolute paths elsewhere on disk work too.
 
@@ -56,10 +60,10 @@ Then invoke the **intake** agent with:
 Intake returns an `IntakeResult` JSON with a `run_id` and one entry per file. Create the state directory:
 
 ```bash
-mkdir -p "$HOME/OptimindDocs/.polish-state/<run_id>"
+mkdir -p "${user_config.state_dir}/<run_id>"
 ```
 
-Write the IntakeResult into `$HOME/OptimindDocs/.polish-state/<run_id>/state.json`.
+Write the IntakeResult into `${user_config.state_dir}/<run_id>/state.json`.
 
 For batch mode (folder input), run steps 2–13 once per file with a separate `run_id` each time, then emit a single rollup summary at the end.
 
@@ -71,24 +75,40 @@ Run the Python pipeline's parse stage. It reads the source document and writes o
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/scripts/run.sh" -m polish \
   --stage parse \
-  --state-dir "$HOME/OptimindDocs/.polish-state/<run_id>"
+  --state-dir "${user_config.state_dir}/<run_id>"
 ```
 
 **Windows (PowerShell):**
 ```powershell
-powershell -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN_ROOT}/scripts/run.ps1" -m polish --stage parse --state-dir "$HOME/OptimindDocs/.polish-state/<run_id>"
+powershell -ExecutionPolicy Bypass -File "${CLAUDE_PLUGIN_ROOT}/scripts/run.ps1" -m polish --stage parse --state-dir "${user_config.state_dir}/<run_id>"
 ```
 
 **On Windows always use run.ps1, even inside Git Bash** — run.ps1 auto-installs Python when missing; run.sh does not.
 
 Expected exit code: `0`. If non-zero, read stderr and surface the error. Do not retry.
 
+## Step 2b — Audit-parse (PDF inputs only)
+
+For PDF inputs, run the manifest producer immediately after parse. Skip this step for `.docx` inputs.
+
+```bash
+"${CLAUDE_PLUGIN_ROOT}/scripts/run.sh" -m polish \
+  --stage audit_parse \
+  --state-dir "${user_config.state_dir}/<run_id>"
+```
+
+This writes `<state_dir>/manifest.md` — a structured, human+LLM-readable description of every element in the document with all data verbatim.
+
+**After audit_parse for PDF inputs**, invoke the **classifier** agent in `manifest_classify` mode (see `agents/classifier.md` § Mode 2). The agent reads `manifest.md` and writes `<state_dir>/blocks/block_stream.json`. Then skip to Step 7 (Render) — the classify/refine/chart_extract stages are replaced by the manifest flow for PDF.
+
+For `.docx` inputs, the manifest is also produced (for consistency and auditor use) but the standard classify → refine → chart_extract pipeline runs as normal.
+
 ## Step 3 — Classify (may emit handoffs)
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/scripts/run.sh" -m polish \
   --stage classify \
-  --state-dir "$HOME/OptimindDocs/.polish-state/<run_id>"
+  --state-dir "${user_config.state_dir}/<run_id>"
 ```
 
 **Exit code handling:**
@@ -97,7 +117,7 @@ Expected exit code: `0`. If non-zero, read stderr and surface the error. Do not 
   ```bash
   "${CLAUDE_PLUGIN_ROOT}/scripts/run.sh" -m polish \
     --stage classify --resume \
-    --state-dir "$HOME/OptimindDocs/.polish-state/<run_id>"
+    --state-dir "${user_config.state_dir}/<run_id>"
   ```
   Loop until exit `0`.
 - `20` — soft failure. Do not retry here; continue and Renderer-QA will diagnose.
@@ -110,7 +130,7 @@ Expected exit code: `0`. If non-zero, read stderr and surface the error. Do not 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/scripts/run.sh" -m polish \
   --stage refine \
-  --state-dir "$HOME/OptimindDocs/.polish-state/<run_id>"
+  --state-dir "${user_config.state_dir}/<run_id>"
 ```
 
 Deterministic. Exit `0` expected.
@@ -120,7 +140,7 @@ Deterministic. Exit `0` expected.
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/scripts/run.sh" -m polish \
   --stage chart_extract \
-  --state-dir "$HOME/OptimindDocs/.polish-state/<run_id>"
+  --state-dir "${user_config.state_dir}/<run_id>"
 ```
 
 Same exit-code handling as step 3. On `10`, invoke the **classifier** agent with the chart-inference payload. Pass resolutions into `resolutions/chart_infer/` and re-run with `--resume`.
@@ -130,7 +150,7 @@ Same exit-code handling as step 3. On `10`, invoke the **classifier** agent with
 Before running `render`, check for `pending/ds_extend/`:
 
 ```bash
-ls "$HOME/OptimindDocs/.polish-state/<run_id>/pending/ds_extend/" 2>/dev/null
+ls "${user_config.state_dir}/<run_id>/pending/ds_extend/" 2>/dev/null
 ```
 
 If non-empty, Python has collected blocks the classifier returned as `unknown`. Python will also have grouped them by content signature in `pending/ds_extend/_groups.json`. For each group, invoke the **ds-extender** agent with the group's representative block. The agent stages tokens + renderer + ui-kit patch under `<state_dir>/staged/` and returns a `figma_node_id`.
@@ -142,7 +162,7 @@ Write each reply under `<state_dir>/resolutions/ds_extend/<block_index>.json`.
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/scripts/run.sh" -m polish \
   --stage render \
-  --state-dir "$HOME/OptimindDocs/.polish-state/<run_id>"
+  --state-dir "${user_config.state_dir}/<run_id>"
 ```
 
 This writes the `.docx` to `<state_dir>/output/<name>-polished-<date>.docx` (staged — not yet in the user's output folder).
@@ -159,7 +179,7 @@ Invoke the **renderer-qa** agent with:
 
 ```json
 {
-  "state_dir": "$HOME/OptimindDocs/.polish-state/<run_id>",
+  "state_dir": "${user_config.state_dir}/<run_id>",
   "output_path": "<staged output path>",
   "sidecar_path": "<staged sidecar>",
   "retry_counter": { "render": 0, "classify": 0, "ds_extend": 0, "chart_extract": 0 },
@@ -194,7 +214,7 @@ Atomic move of staged DS extensions into the repo (or discard if QA failed with 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/scripts/run.sh" -m polish \
   --stage promote \
-  --state-dir "$HOME/OptimindDocs/.polish-state/<run_id>"
+  --state-dir "${user_config.state_dir}/<run_id>"
 ```
 
 This copies `<state_dir>/staged/tokens_extensions.json` into `scripts/polish/render/tokens_extensions.json` (merge), moves `staged/dynamic/*.py` into `scripts/polish/render/dynamic/`, and applies `staged/ui-kit.md.patch` to `skills/polish/references/ui-kit.md`.
@@ -206,10 +226,10 @@ If the run is `degraded: true`, skip promotion of staged DS extensions — they 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/scripts/run.sh" -m polish \
   --stage report \
-  --state-dir "$HOME/OptimindDocs/.polish-state/<run_id>"
+  --state-dir "${user_config.state_dir}/<run_id>"
 ```
 
-This writes the final three artifacts to `~/OptimindDocs/output/`:
+This writes the final three artifacts to `${user_config.output_dir}/`:
 - `<basename>.docx`
 - `<basename>.classification.json`
 - `<basename>.report.html`
@@ -253,7 +273,7 @@ Full schemas for every handoff direction live in `references/handoff-protocol.md
 - **If a subagent invocation errors** (not just returns a failed resolution — actually errors at the tool level), retry it once; if it errors again, surface the error to the user verbatim and stop. Do not fall back to hallucinating a resolution.
 - **If `pending/ds_extend/` accumulates more than 10 groups** for a single document, something is likely wrong with the source file (not a design-system gap). Stop and ask the user before extending the DS ten times in one run.
 - **On Windows, always use run.ps1.** Do not call `python` directly; do not call run.sh via Git Bash.
-- **Do not touch the files under `~/OptimindDocs/.polish-state/<run_id>/`** except through the documented protocol — Python treats the state bundle as its durable truth.
+- **Do not touch the files under `${user_config.state_dir}/<run_id>/`** except through the documented protocol — Python treats the state bundle as its durable truth.
 - **On first run on a new machine** the plugin builds a local venv (~30 s on macOS/Linux, up to ~2 min on Windows if Python must be installed). Subsequent runs are instant. If the first run fails with a "Python 3 was not found" error: macOS `brew install python`; Linux `sudo apt install python3 python3-venv`; Windows re-run via run.ps1 in PowerShell.
 
 ## Batch mode
@@ -262,7 +282,7 @@ If Intake returned multiple files (folder input), run steps 2–12 once per file
 
 ```
 Polished 5 of 5 inputs. 2 degraded. 1 new DS component across the batch.
-See individual reports under ~/OptimindDocs/output/
+See individual reports under ${user_config.output_dir}/
 ```
 
 If any file failed hard, list each with its error on its own line.

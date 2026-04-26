@@ -49,29 +49,29 @@ class TextStyle:
     size: Pt
     bold: bool
     color: RGBColor
-    uppercase: bool = False
+    uppercase: bool = False    # w:caps — currently unused
+    titlecase: bool = False    # Python .title() applied at render time (labels only)
+    semibold: bool = False     # Use "Poppins SemiBold" face instead of Bold
     letter_spacing_pt: float = 0.0
     line_spacing: float = 1.5   # multiplier
 
 
 TITLES_COVER     = TextStyle(size=Pt(40), bold=True,  color=TEXT_PRI, line_spacing=1.1)
 TITLES_MAIN      = TextStyle(size=Pt(16), bold=True,  color=TEXT_PRI, line_spacing=1.25)
-TITLES_SUB       = TextStyle(size=Pt(12), bold=True,  color=TEXT_PRI, line_spacing=1.3)
-TITLES_TABLE     = TextStyle(size=Pt(10), bold=True,  color=WHITE,    line_spacing=1.25)
+TITLES_SUB       = TextStyle(size=Pt(13), bold=True,  color=TEXT_PRI, line_spacing=1.3)
+TITLES_TABLE     = TextStyle(size=Pt(9),  bold=True,  color=WHITE,    line_spacing=1.25)
 TEXT_COVER       = TextStyle(size=Pt(12), bold=False, color=TEXT_PRI, line_spacing=1.4)
-TEXT_MAIN        = TextStyle(size=Pt(11), bold=False, color=TEXT_PRI, line_spacing=1.5)
-TEXT_TABLE       = TextStyle(size=Pt(10), bold=False, color=TEXT_PRI, line_spacing=1.25)
-TEXT_DISCLAIMER  = TextStyle(size=Pt(9),  bold=False, color=TEXT_SEC, line_spacing=1.3)
-LABELS_COVER     = TextStyle(size=Pt(11), bold=True,  color=TEXT_PRI,
-                             uppercase=True, letter_spacing_pt=1.32)
-LABELS_MAIN      = TextStyle(size=Pt(10), bold=True,  color=TEXT_SEC,
-                             uppercase=True, letter_spacing_pt=1.2)
+TEXT_MAIN        = TextStyle(size=Pt(10), bold=False, color=TEXT_SEC, line_spacing=1.5)
+TEXT_TABLE       = TextStyle(size=Pt(9),  bold=False, color=TEXT_SEC, line_spacing=1.25)
+TEXT_DISCLAIMER  = TextStyle(size=Pt(8),  bold=False, color=TEXT_SEC, line_spacing=1.3)
+LABELS_COVER     = TextStyle(size=Pt(11), bold=False, color=TEXT_PRI, semibold=True, titlecase=True)
+LABELS_MAIN      = TextStyle(size=Pt(11), bold=False, color=TEXT_SEC, semibold=True, titlecase=True)
 
 
 HEADING_STYLES = {
     1: TITLES_MAIN,
     2: TITLES_SUB,
-    3: TextStyle(size=Pt(11), bold=True, color=TEXT_PRI, line_spacing=1.35),
+    3: TextStyle(size=Pt(11), bold=True,  color=TEXT_PRI, line_spacing=1.35),
 }
 
 
@@ -81,16 +81,16 @@ PAGE_MARGIN_BOTTOM_TWIPS = 1080
 PAGE_MARGIN_LEFT_TWIPS   = 1080
 PAGE_MARGIN_RIGHT_TWIPS  = 1080
 
-CELL_PAD_V_TWIPS = 100
-CELL_PAD_H_TWIPS = 120
+CELL_PAD_V_TWIPS = 86    # 6px → twips (matches Figma padV=6)
+CELL_PAD_H_TWIPS = 115   # 8px → twips (matches Figma padH=8)
 
 H1_DIVIDER_SIZE_TWIPS   = 4
 BORDER_DEFAULT_SZ       = 4
 BORDER_STRONG_SZ        = 8
 
-PARA_SPACE_AFTER_TWIPS  = 120
-HEADING_SPACE_BEFORE_TWIPS = 360
-HEADING_SPACE_AFTER_TWIPS  = 120
+PARA_SPACE_AFTER_TWIPS  = 180
+HEADING_SPACE_BEFORE_TWIPS = 400
+HEADING_SPACE_AFTER_TWIPS  = 160
 
 
 # ── Callout palette ──────────────────────────────────────────────────────────
@@ -99,13 +99,17 @@ class CalloutPalette:
     fill: RGBColor
     label_color: RGBColor
     body_color: RGBColor
+    pad_v_twips: int = 280   # vertical padding (top/bottom)
+    pad_h_twips: int = 360   # horizontal padding (left/right)
 
 
 CALLOUT_PALETTES = {
-    "insight":    CalloutPalette(fill=BG_BRAND,  label_color=RED,      body_color=TEXT_PRI),
-    "next_steps": CalloutPalette(fill=BG_SUBTLE, label_color=TEXT_PRI, body_color=TEXT_SEC),
-    "warning":    CalloutPalette(fill=BG_BRAND,  label_color=RED,      body_color=TEXT_PRI),
-    "note":       CalloutPalette(fill=BG_SUBTLE, label_color=TEXT_SEC, body_color=TEXT_PRI),
+    # brand variants: 16pt V / 18pt H
+    "insight":    CalloutPalette(fill=BG_BRAND,  label_color=RED,      body_color=TEXT_PRI, pad_v_twips=320, pad_h_twips=360),
+    "warning":    CalloutPalette(fill=BG_BRAND,  label_color=RED,      body_color=TEXT_PRI, pad_v_twips=320, pad_h_twips=360),
+    # subtle variants: 14pt V / 18pt H
+    "next_steps": CalloutPalette(fill=BG_SUBTLE, label_color=TEXT_PRI, body_color=TEXT_SEC, pad_v_twips=280, pad_h_twips=360),
+    "note":       CalloutPalette(fill=BG_SUBTLE, label_color=TEXT_SEC, body_color=TEXT_SEC, pad_v_twips=280, pad_h_twips=360),
 }
 
 

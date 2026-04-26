@@ -3,6 +3,7 @@ name: intake
 description: Starts every /polish run. Resolves a user-supplied path (file or folder), auto-detects .docx vs .pdf, infers cover metadata (title, client, reporting period) from the first couple of pages, and confirms the inferred values with the user before the polish pipeline runs. Never reads block-level content; never modifies output files.
 tools: Read, Bash, Glob
 model: sonnet
+maxTurns: 10
 ---
 
 # Intake

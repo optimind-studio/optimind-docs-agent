@@ -153,6 +153,13 @@ try {
     Write-Info "Font install step skipped: $_"
 }
 
+# --install-only: used by the SessionStart hook to bootstrap deps without
+# running the pipeline. Exit here so the hook doesn't accidentally exec python
+# with no meaningful args.
+if ($args.Count -gt 0 -and $args[0] -eq "--install-only") {
+    exit 0
+}
+
 # Put `scripts/` on the module search path so `python -m polish` resolves.
 if ($env:PYTHONPATH) {
     $env:PYTHONPATH = "$ScriptDir;$env:PYTHONPATH"

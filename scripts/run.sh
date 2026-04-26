@@ -66,6 +66,13 @@ fi
 # render in Poppins on this machine.
 "$VENV_PY" "$PLUGIN_ROOT/scripts/install_fonts.py" "$FONTS_SRC" || true
 
+# --install-only: used by the SessionStart hook to bootstrap deps without
+# running the pipeline. Exit here so the hook doesn't accidentally exec python
+# with no meaningful args.
+if [ "${1:-}" = "--install-only" ]; then
+  exit 0
+fi
+
 # Put `scripts/` on the module search path so `python -m polish` resolves.
 export PYTHONPATH="$PLUGIN_ROOT/scripts${PYTHONPATH:+:$PYTHONPATH}"
 

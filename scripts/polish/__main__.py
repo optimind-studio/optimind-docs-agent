@@ -36,6 +36,7 @@ import traceback
 from dataclasses import asdict
 from pathlib import Path
 
+from . import audit_parse as audit_parse_mod
 from . import chart_extract as chart_mod
 from . import classify as classify_mod
 from . import flatten as flatten_mod
@@ -80,6 +81,8 @@ def main(argv: list[str] | None = None) -> int:
 def _dispatch_stage(stage: str, state_dir: Path, *, resume: bool) -> int:
     if stage == "parse":
         return _stage_parse(state_dir)
+    if stage == "audit_parse":
+        return _stage_audit_parse(state_dir)
     if stage == "classify":
         return _stage_classify(state_dir, resume=resume)
     if stage == "refine":
@@ -105,7 +108,7 @@ def _dispatch_stage(stage: str, state_dir: Path, *, resume: bool) -> int:
 def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     p = argparse.ArgumentParser(prog="polish", description="Optimind Docs polisher — stage machine")
     p.add_argument("--stage", required=True, choices=(
-        "init", "parse", "classify", "refine", "chart_extract",
+        "init", "parse", "audit_parse", "classify", "refine", "chart_extract",
         "ds_extend", "render", "verify", "promote", "report",
     ))
     p.add_argument("--state-dir", default=None, help="State bundle dir (required for every stage except init)")
@@ -187,6 +190,17 @@ def _stage_parse(state_dir: Path) -> int:
     return 0
 
 
+# ── audit_parse ─────────────────────────────────────────────────────────────
+
+def _stage_audit_parse(state_dir: Path) -> int:
+    st = state_mod.load_state(state_dir)
+    input_path = Path(st["input_path"])
+    manifest_path = audit_parse_mod.produce_manifest(input_path, state_dir)
+    state_mod.advance_stage(state_dir, "audit_parse_complete")
+    print(json.dumps({"stage": "audit_parse_complete", "manifest": str(manifest_path)}))
+    return 0
+
+
 def _parse_out(state_dir: Path) -> Path:
     return state_dir / "primitives.pkl"
 
@@ -256,8 +270,14 @@ def _stage_classify(state_dir: Path, *, resume: bool) -> int:
 # ── refine ──────────────────────────────────────────────────────────────────
 
 def _stage_refine(state_dir: Path) -> int:
+    st = state_mod.load_state(state_dir)
     blocks = _load_blocks_from_disk(state_dir)
-    blocks, warnings = refine_mod.refine(blocks)
+    blocks, warnings = refine_mod.refine(
+        blocks,
+        title=st.get("title", ""),
+        client=st.get("client", ""),
+        period=st.get("period", ""),
+    )
     _persist_blocks(state_dir, blocks)
     for w in warnings:
         state_mod.add_warning(state_dir, w)
@@ -533,8 +553,9 @@ def _persist_blocks(state_dir: Path, blocks: list[Block]) -> None:
 def _load_blocks_from_disk(state_dir: Path) -> list[Block]:
     """Rehydrate canonical Block instances from blocks/<index>.json + blobs."""
     from .model import (
-        Block, Callout, Chart, Figure, Heading, KPICard, KPIStrip,
-        List as ListBlock, ListItem, MergeSpec, Paragraph, Run, Series, Table,
+        ActionCard, Block, Callout, Chart, ComparisonPanel, Figure, Heading,
+        KPICard, KPIStrip, List as ListBlock, ListItem, MergeSpec, Paragraph,
+        Run, SectionLabel, Series, Table,
     )
 
     blobs: dict[int, bytes] = {}
@@ -601,6 +622,24 @@ def _load_blocks_from_disk(state_dir: Path) -> list[Block]:
                 image_format=c.get("image_format", "png"),
                 caption=c.get("caption"),
                 alt=c.get("alt"),
+            )
+        elif kind == "section_label":
+            content = SectionLabel(
+                text=c.get("text", ""),
+                number=c.get("number"),
+            )
+        elif kind == "action_card":
+            content = ActionCard(
+                number=c.get("number", ""),
+                title=c.get("title", ""),
+                body=c.get("body", ""),
+            )
+        elif kind == "comparison_panel":
+            content = ComparisonPanel(
+                left_title=c.get("left_title", ""),
+                left_items=list(c.get("left_items") or []),
+                right_title=c.get("right_title", ""),
+                right_items=list(c.get("right_items") or []),
             )
         else:
             # Unknown → treat as paragraph fallback.

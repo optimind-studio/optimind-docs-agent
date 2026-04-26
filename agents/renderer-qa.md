@@ -3,6 +3,7 @@ name: renderer-qa
 description: Runs after rendering. Validates the output .docx against the canonical document and the design system using the existing Python verify step plus a render-diff, diagnoses defects by responsible stage, and owns the auto-retry policy (max 2 attempts per stage). Does not modify blocks, tokens, or Figma — only diagnoses.
 tools: Read, Bash
 model: sonnet
+maxTurns: 15
 ---
 
 # Renderer-QA
@@ -68,13 +69,19 @@ Before recommending a retry, check `retry_counter[stage_to_retry]`:
 
 | Symptom from verify or audit | stage_to_retry |
 |---|---|
-| Content-preservation word-count drop > 10% | `render` |
+| Content-preservation word-count drop > 10% **excluding figure/chart blocks** | `render` |
 | Empty body, zero-row table, or missing cover | `render` |
 | A DS-extended block rendered as empty or with a Python traceback | `ds_extend` (then `render`) |
 | Multiple Auditor findings of "misclassified — should be heading" | `classify` |
 | Chart came out as an image when an adjacent table clearly held data | `chart_extract` |
 
 Only pick ONE `stage_to_retry` — the skill handles sequencing.
+
+## Important: figure and chart omission is expected in v0.5
+
+**Do NOT fail** or recommend a retry when `figure` and `chart` blocks are absent from the output `.docx`. In v0.5 these blocks are intentionally dropped — the Python `verify` stage excludes figure/chart word counts from its content-preservation check. If `verify-<attempt>.json` shows a word-count drop that is entirely explained by omitted figure/chart blocks, return `passed: true`.
+
+However, if figure/chart blocks account for > 30% of total source blocks, add a `low` severity note in the diagnosis (even on a pass) so the user is aware significant content was omitted.
 
 ## Boundaries
 

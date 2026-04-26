@@ -1,5 +1,6 @@
 {
   "enabledPlugins": {
     "optimind-docs@local-desktop-app-uploads": true
-  }
+  },
+  "agentStatusLine": "Polishing document…"
 }

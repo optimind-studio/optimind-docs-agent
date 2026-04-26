@@ -66,15 +66,15 @@ def set_cell_padding(cell, top=100, bottom=100, left=120, right=120) -> None:
     tcPr.append(tcMar)
 
 
-def set_cell_width(cell, twips: int) -> None:
+def set_cell_width(cell, value: int, width_type: str = "dxa") -> None:
     tc = cell._tc
     tcPr = tc.get_or_add_tcPr()
     old = tcPr.find(qn("w:tcW"))
     if old is not None:
         tcPr.remove(old)
     tcW = OxmlElement("w:tcW")
-    tcW.set(qn("w:w"), str(twips))
-    tcW.set(qn("w:type"), "dxa")
+    tcW.set(qn("w:w"), str(value))
+    tcW.set(qn("w:type"), width_type)
     tcPr.append(tcW)
 
 
@@ -113,9 +113,11 @@ def apply_text_style(run, style: TextStyle, *, override_bold: bool | None = None
     italic = False if override_italic is None else override_italic
     color = style.color if override_color is None else override_color
 
-    run.font.name = FONT_FAMILY
+    # SemiBold uses the "Poppins SemiBold" face name — don't set w:b.
+    font_face = f"{FONT_FAMILY} SemiBold" if style.semibold else FONT_FAMILY
+    run.font.name = font_face
     run.font.size = style.size
-    run.font.bold = bold
+    run.font.bold = None if style.semibold else bold
     run.font.italic = italic
     run.font.color.rgb = color
 
@@ -124,9 +126,9 @@ def apply_text_style(run, style: TextStyle, *, override_bold: bool | None = None
     for el in rPr.findall(qn("w:rFonts")):
         rPr.remove(el)
     rFonts = OxmlElement("w:rFonts")
-    rFonts.set(qn("w:ascii"), FONT_FAMILY)
-    rFonts.set(qn("w:hAnsi"), FONT_FAMILY)
-    rFonts.set(qn("w:cs"),    FONT_FAMILY)
+    rFonts.set(qn("w:ascii"), font_face)
+    rFonts.set(qn("w:hAnsi"), font_face)
+    rFonts.set(qn("w:cs"),    font_face)
     rPr.insert(0, rFonts)
 
     if style.letter_spacing_pt:
@@ -136,12 +138,9 @@ def apply_text_style(run, style: TextStyle, *, override_bold: bool | None = None
         spacing.set(qn("w:val"), str(int(style.letter_spacing_pt * 20)))
         rPr.append(spacing)
 
-    if style.uppercase:
-        for c in rPr.findall(qn("w:caps")):
-            rPr.remove(c)
-        caps = OxmlElement("w:caps")
-        caps.set(qn("w:val"), "1")
-        rPr.append(caps)
+    if style.titlecase and run.text:
+        # Word has no native title-case property — apply at text level for labels only.
+        run.text = run.text.title()
 
     # Strip RTL to prevent number/punctuation reordering in mixed-direction docs.
     for rtl in rPr.findall(qn("w:rtl")):

@@ -29,14 +29,46 @@ from .xml_utils import (
 
 _NUMERIC_RE = re.compile(r'^\s*[\$€£¥]?\s*[-+]?\d[\d,]*(\.\d+)?\s*%?\s*$')
 
+_BADGE_POSITIVE = frozenset({
+    "strong", "top performer", "good", "excellent ctr", "best in program",
+    "scale up", "top opener", "lead2sale", "high", "excellent",
+})
+_BADGE_NEGATIVE = frozenset({
+    "underperforming", "low open rate", "low", "poor", "weak",
+})
+_BADGE_NEUTRAL = frozenset({
+    "average", "solid", "opens↑ ctr↓", "core market", "niche re-activation",
+    "increase volume", "moderate", "mixed",
+})
+_BADGE_ALL = _BADGE_POSITIVE | _BADGE_NEGATIVE | _BADGE_NEUTRAL
+
 
 def render(doc_docx, table: Table) -> None:
     if not table.rows and not table.headers:
         return
 
+    # Spacer paragraph above the table so it breathes with surrounding content.
+    spacer = doc_docx.add_paragraph()
+    set_paragraph_spacing(spacer, before_twips=0, after_twips=80, line_multiple=1.0)
+
+    # Multi-row header fixup: some sources produce a merged spanning cell in
+    # row 0 (a table title) with the column labels in row 1.  Ingest places
+    # row 0 in headers and row 1 as the first body row, leaving rows[0] as
+    # the label row.  Detect this: if rows[0] has no empty cells and looks
+    # like labels (no numeric values) while headers[-1] is all-empty or a
+    # single-cell merged span, promote rows[0] into headers.
+    body_rows = list(table.rows)
+    extra_headers: list = []
+    if (table.headers and body_rows
+            and _row_is_label_candidate(body_rows[0])
+            and _row_is_spanning_title(table.headers[-1])):
+        extra_headers = [body_rows.pop(0)]
+
+    headers = list(table.headers) + extra_headers
+
     # Build a single matrix of all rows including header rows for rendering.
-    header_row_count = len(table.headers)
-    total_rows = header_row_count + len(table.rows)
+    header_row_count = len(headers)
+    total_rows = header_row_count + len(body_rows)
     n_cols = _infer_col_count(table)
 
     if total_rows == 0 or n_cols == 0:
@@ -49,24 +81,45 @@ def render(doc_docx, table: Table) -> None:
     # Populate cells
     for row_idx in range(total_rows):
         if row_idx < header_row_count:
-            source_row = table.headers[row_idx]
+            source_row = headers[row_idx]
             is_header = True
         else:
-            source_row = table.rows[row_idx - header_row_count]
+            source_row = body_rows[row_idx - header_row_count]
             is_header = False
         _populate_row(t, row_idx, source_row, n_cols,
                       is_header=is_header,
                       is_last_body=row_idx == total_rows - 1 and not is_header,
-                      variant=table.variant,
-                      numeric_cols=_numeric_columns(table.rows, n_cols))
+                      numeric_cols=_numeric_columns(body_rows, n_cols))
 
     # Apply merges. MergeSpec indexes into total_rows (0-based, headers first).
     for m in table.merges:
         _apply_merge(t, m, n_cols=n_cols, total_rows=total_rows)
 
-    # Caption
+    # Caption / trailing spacer
     if table.caption:
         _add_caption(doc_docx, table.caption)
+    else:
+        # Add a small spacer below the table even without a caption.
+        post = doc_docx.add_paragraph()
+        set_paragraph_spacing(post, before_twips=0, after_twips=160, line_multiple=1.0)
+
+
+# ── multi-row header helpers ────────────────────────────────────────────────
+
+def _row_is_spanning_title(row) -> bool:
+    """True if a header row looks like a merged spanning title: exactly one
+    non-empty cell (the rest are empty / continuation stubs)."""
+    non_empty = [c for c in row if str(c).strip()]
+    return len(non_empty) <= 1
+
+
+def _row_is_label_candidate(row) -> bool:
+    """True if the row looks like column labels: all cells non-empty and none
+    match the numeric pattern (labels, not data values)."""
+    cells = [str(c).strip() for c in row]
+    if not cells or any(c == "" for c in cells):
+        return False
+    return not any(_NUMERIC_RE.match(c) for c in cells)
 
 
 # ── frame ───────────────────────────────────────────────────────────────────
@@ -101,45 +154,39 @@ def _set_table_frame(tbl) -> None:
 
 def _populate_row(tbl, row_idx: int, source_row, n_cols: int, *,
                   is_header: bool, is_last_body: bool,
-                  variant: str, numeric_cols: set[int]) -> None:
+                  numeric_cols: set[int]) -> None:
     row = tbl.rows[row_idx]
     for col_idx in range(n_cols):
         cell = row.cells[col_idx]
         text = source_row[col_idx] if col_idx < len(source_row) else ""
         _style_cell(cell, text, col_idx=col_idx, row_idx=row_idx,
                     is_header=is_header, is_last_body=is_last_body,
-                    variant=variant, is_numeric_col=col_idx in numeric_cols)
+                    is_numeric_col=col_idx in numeric_cols)
 
 
 def _style_cell(cell, text: str, *, col_idx: int, row_idx: int,
                 is_header: bool, is_last_body: bool,
-                variant: str, is_numeric_col: bool) -> None:
-    # Fill
-    if variant == "classic":
-        if is_header:
-            set_cell_color(cell, T.RED)
-        elif row_idx % 2 == 0:                      # zebra
-            set_cell_color(cell, T.BG_SUBTLE)
-        else:
-            set_cell_color(cell, T.WHITE)
-    else:  # minimal
+                is_numeric_col: bool) -> None:
+    # Only the first header row gets the red Classic fill; subsequent header
+    # rows (row_idx > 0 and is_header) are treated as bold body rows so that
+    # data rows accidentally placed in table.headers don't render in red.
+    true_header = is_header and row_idx == 0
+
+    # Fill — always classic style (red header, zebra body)
+    if true_header:
+        set_cell_color(cell, T.RED)
+    elif row_idx % 2 == 0:
+        set_cell_color(cell, T.BG_SUBTLE)
+    else:
         set_cell_color(cell, T.WHITE)
 
     # Borders
-    if variant == "classic":
-        set_cell_borders(
-            cell,
-            top=T.BORDER_STR if is_header else (T.BORDER_DEF if row_idx > 0 else None),
-            bottom=T.BORDER_DEF if is_last_body else None,
-            left=None, right=None,
-        )
-    else:  # minimal
-        set_cell_borders(
-            cell,
-            top=T.BORDER_STR if is_header and row_idx == 0 else None,
-            bottom=(T.BORDER_STR if (is_header or is_last_body) else T.BORDER_DEF),
-            left=None, right=None,
-        )
+    set_cell_borders(
+        cell,
+        top=T.BORDER_STR if true_header else (T.BORDER_DEF if row_idx > 0 else None),
+        bottom=T.BORDER_DEF if is_last_body else None,
+        left=None, right=None,
+    )
 
     set_cell_padding(cell, top=T.CELL_PAD_V_TWIPS, bottom=T.CELL_PAD_V_TWIPS,
                      left=T.CELL_PAD_H_TWIPS, right=T.CELL_PAD_H_TWIPS)
@@ -155,22 +202,27 @@ def _style_cell(cell, text: str, *, col_idx: int, row_idx: int,
     # Alignment
     if is_numeric_col and not is_header:
         para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    elif is_header:
+    elif true_header:
         para.alignment = WD_ALIGN_PARAGRAPH.LEFT if col_idx == 0 else WD_ALIGN_PARAGRAPH.CENTER
     elif col_idx == 0:
         para.alignment = WD_ALIGN_PARAGRAPH.LEFT
     else:
         para.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
+    # Badge cell: short status text → bold with sentiment color
+    if not is_header and text.strip().lower() in _BADGE_ALL:
+        _style_badge_run(para.add_run(text), text.strip().lower())
+        return
+
     run = para.add_run(text)
 
-    if is_header:
-        if variant == "classic":
-            apply_text_style(run, T.TITLES_TABLE)
-        else:
-            apply_text_style(run, T.LABELS_MAIN)
+    if true_header:
+        apply_text_style(run, T.TITLES_TABLE)
+    elif is_header:
+        # Non-first header rows: bold body text (data rows mis-placed in headers)
+        apply_text_style(run, T.TEXT_TABLE, override_bold=True)
     elif col_idx == 0:
-        apply_text_style(run, T.TEXT_TABLE)
+        apply_text_style(run, T.TEXT_TABLE, override_color=T.TEXT_PRI)
     else:
         apply_text_style(run, T.TEXT_TABLE, override_color=T.TEXT_SEC)
 
@@ -236,9 +288,19 @@ def _numeric_columns(rows, n_cols: int) -> set[int]:
     return cols
 
 
+def _style_badge_run(run, lower_text: str) -> None:
+    if lower_text in _BADGE_POSITIVE:
+        color = T.TEXT_PRI
+    elif lower_text in _BADGE_NEGATIVE:
+        color = T.RED
+    else:
+        color = T.TEXT_SEC
+    apply_text_style(run, T.TEXT_TABLE, override_bold=True, override_color=color)
+
+
 def _add_caption(doc_docx, caption: str) -> None:
     para = doc_docx.add_paragraph()
-    set_paragraph_spacing(para, before_twips=60, after_twips=180, line_multiple=1.2)
+    set_paragraph_spacing(para, before_twips=80, after_twips=240, line_multiple=1.2)
     para.alignment = WD_ALIGN_PARAGRAPH.CENTER
     run = para.add_run(caption)
     apply_text_style(run, T.TEXT_DISCLAIMER, override_italic=True)

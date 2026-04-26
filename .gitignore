@@ -20,6 +20,9 @@ venv/
 # --- Dev tooling indexes (per-machine, not shared) ---
 .serena/
 
+# --- Creator-only: Figma desktop plugin MCP server (not needed by colleagues) ---
+.mcp.json
+
 # --- Build artifacts (reproducible from source; published via GitHub Releases) ---
 /dist/
 

@@ -5,7 +5,7 @@ Durable contract between the Python pipeline, the `/polish` skill orchestrator, 
 ## State bundle directory
 
 ```
-~/OptimindDocs/.polish-state/<run-id>/
+~/.polish-state/<run-id>/   ← default; actual path set by user at install time
 ├── state.json
 ├── blocks/<index>.json
 ├── pending/

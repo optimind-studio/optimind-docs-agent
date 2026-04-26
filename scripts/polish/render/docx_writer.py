@@ -23,14 +23,17 @@ from docx.shared import Pt
 
 from ..model import Document as CanonicalDoc
 from . import (
+    action_card as action_card_renderer,
     callout as callout_renderer,
     chart as chart_renderer,
+    comparison_panel as comparison_panel_renderer,
     cover as cover_mod,
     figure as figure_renderer,
     heading as heading_renderer,
     kpi_strip as kpi_renderer,
     list_block as list_renderer,
     paragraph as paragraph_renderer,
+    section_label as section_label_renderer,
     table as table_renderer,
     tokens as T,
 )
@@ -41,6 +44,7 @@ from .xml_utils import apply_text_style, set_paragraph_spacing
 STATIC_RENDERERS = {
     "heading", "paragraph", "list", "callout",
     "table", "kpi_strip", "chart", "figure",
+    "section_label", "action_card", "comparison_panel",
 }
 
 
@@ -59,7 +63,7 @@ def write(doc: CanonicalDoc, output_path: Path) -> Path:
 
     # Walk blocks and dispatch.
     for block in doc.blocks:
-        _render_block(body, block)
+        _render_block(body, block, doc.warnings)
 
     _add_header_footer(body, title=doc.title)
 
@@ -79,10 +83,26 @@ def write(doc: CanonicalDoc, output_path: Path) -> Path:
 
 # ── dispatch ────────────────────────────────────────────────────────────────
 
-def _render_block(body_docx, block) -> None:
+def _render_block(body_docx, block, warnings: list | None = None) -> None:
     kind = block.kind
     c = block.content
-    if kind == "heading":
+    if kind == "figure":
+        # Images are not rendered in v0.5 — skipped cleanly, logged in HTML report.
+        if warnings is not None:
+            warnings.append(
+                f"block {block.source_index}: figure omitted "
+                f"(image rendering disabled in v0.5)"
+            )
+        return
+    elif kind == "chart":
+        # Charts are not rendered in v0.5 — skipped cleanly, logged in HTML report.
+        if warnings is not None:
+            warnings.append(
+                f"block {block.source_index}: chart omitted "
+                f"(chart rendering disabled in v0.5)"
+            )
+        return
+    elif kind == "heading":
         heading_renderer.render(body_docx, c)
     elif kind == "paragraph":
         paragraph_renderer.render(body_docx, c)
@@ -94,10 +114,12 @@ def _render_block(body_docx, block) -> None:
         table_renderer.render(body_docx, c)
     elif kind == "kpi_strip":
         kpi_renderer.render(body_docx, c)
-    elif kind == "chart":
-        chart_renderer.render(body_docx, c)
-    elif kind == "figure":
-        figure_renderer.render(body_docx, c)
+    elif kind == "section_label":
+        section_label_renderer.render(body_docx, c)
+    elif kind == "action_card":
+        action_card_renderer.render(body_docx, c)
+    elif kind == "comparison_panel":
+        comparison_panel_renderer.render(body_docx, c)
     else:
         # Dynamic dispatch: DS-Extender may have generated a renderer for this
         # kind in render/dynamic/. Fall back to a paragraph if unavailable so

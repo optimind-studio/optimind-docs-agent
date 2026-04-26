@@ -25,7 +25,7 @@ def render(doc_docx, heading: Heading) -> None:
 
     set_paragraph_spacing(
         para,
-        before_twips=T.HEADING_SPACE_BEFORE_TWIPS if heading.level == 1 else 240,
+        before_twips=T.HEADING_SPACE_BEFORE_TWIPS if heading.level == 1 else (280 if heading.level == 2 else 200),
         after_twips=T.HEADING_SPACE_AFTER_TWIPS,
         line_multiple=style.line_spacing,
     )

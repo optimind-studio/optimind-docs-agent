@@ -45,18 +45,73 @@ def read(path: Path) -> Iterator[dict]:
     source_index = 0
     for child in list(body):
         tag = _local(child.tag)
-        if tag == "p":
-            token = _paragraph_token(child, rels, source_index)
-            if token is not None:
-                yield token
+        try:
+            if tag == "p":
+                token = _paragraph_token(child, rels, source_index)
+                if token is not None:
+                    yield token
+                    source_index += 1
+            elif tag == "tbl":
+                yield _table_token(child, rels, source_index)
                 source_index += 1
-        elif tag == "tbl":
-            yield _table_token(child, rels, source_index)
+            elif tag == "sectPr":
+                continue                   # section properties are preserved elsewhere
+            else:                          # w:bookmarkStart etc — rare; skip silently
+                continue
+        except Exception:
+            # Corrupt or unexpected XML — skip this element, keep going.
+            yield {
+                "kind": "skipped",
+                "source_index": source_index,
+                "reason": "parse_error",
+                "element": None,
+            }
             source_index += 1
-        elif tag == "sectPr":
-            continue                   # section properties are preserved elsewhere
-        else:                          # w:bookmarkStart etc — rare; skip silently
-            continue
+
+    # Emit substantive header/footer content as paragraph tokens.
+    # Word headers/footers occasionally carry real prose (e.g. section titles,
+    # disclaimers longer than the standard confidentiality line) — we surface
+    # them so the Classifier can decide what to do with them.
+    try:
+        for section in doc.sections:
+            for hf in (section.header, section.footer):
+                try:
+                    for p_el in hf._element.iter(qn("w:p")):
+                        try:
+                            runs = _extract_runs(p_el)
+                            text = "".join(r["text"] for r in runs).strip()
+                            # Skip short chrome (page numbers, short disclaimers).
+                            if len(text) < 25:
+                                continue
+                            # Skip field-only paragraphs (PAGE, NUMPAGES, DATE).
+                            fld_instrs = [
+                                (el.text or "") for el in p_el.iter(qn("w:instrText"))
+                            ]
+                            if any(kw in " ".join(fld_instrs).upper()
+                                   for kw in ("PAGE", "NUMPAGES", "DATE", "TIME")):
+                                continue
+                            yield {
+                                "kind": "paragraph",
+                                "source_index": source_index,
+                                "text": text,
+                                "runs": runs,
+                                "style_name": "HeaderFooter",
+                                "heading_level_hint": None,
+                                "shading_hex": None,
+                                "numbering": None,
+                                "has_page_break": False,
+                                "inline_images": [],
+                                "floating_shapes": [],
+                                "is_vml_hr": False,
+                                "element": None,
+                            }
+                            source_index += 1
+                        except Exception:
+                            continue
+                except Exception:
+                    continue
+    except Exception:
+        pass
 
 
 # ── paragraph ───────────────────────────────────────────────────────────────
@@ -91,7 +146,7 @@ def _paragraph_token(p_el, rels, source_index: int) -> dict | None:
         "inline_images": inline_images,
         "floating_shapes": floating_shapes,
         "is_vml_hr": is_vml_hr,
-        "element": p_el,
+        "element": None,
     }
 
 
@@ -210,6 +265,15 @@ def _infer_heading_level(p_el, text: str, style_name: str) -> int | None:
     stripped = text.strip()
     if _looks_pure_numeric(stripped):
         return None
+
+    # All-caps short paragraph without numbers → likely a section label heading
+    # (e.g. "EXECUTIVE SUMMARY", "KEY FINDINGS") — flag as H3 candidate even
+    # without bold formatting, which design tools often omit on caps labels.
+    if (stripped.isupper()
+            and 3 <= len(stripped) <= 60
+            and "\n" not in stripped
+            and not re.search(r'\d{2,}', stripped)):
+        return 3
 
     has_bold = any((r.find(qn("w:rPr")) is not None and
                     r.find(qn("w:rPr")).find(qn("w:b")) is not None)
@@ -485,7 +549,7 @@ def _table_token(tbl_el, rels, source_index: int) -> dict:
         "n_rows": n_rows,
         "n_cols": n_cols,
         "is_nested": False,
-        "element": tbl_el,
+        "element": None,
     }
 
 

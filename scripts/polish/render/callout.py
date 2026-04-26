@@ -32,7 +32,9 @@ def render(doc_docx, callout: Callout) -> None:
 
     set_cell_color(cell, palette.fill)
     set_cell_borders(cell, top=None, bottom=None, left=None, right=None)
-    set_cell_padding(cell, top=180, bottom=180, left=220, right=220)
+    set_cell_padding(cell,
+                     top=palette.pad_v_twips, bottom=palette.pad_v_twips,
+                     left=palette.pad_h_twips, right=palette.pad_h_twips)
     cell.vertical_alignment = WD_ALIGN_VERTICAL.TOP
 
     # Remove the default empty paragraph inside the cell.

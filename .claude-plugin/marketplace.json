@@ -1,18 +1,17 @@
 {
   "name": "optimind",
   "owner": {
-    "name": "Optimind"
+    "name": "Optimind",
+    "email": "tony.g@optimind.co"
   },
   "metadata": {
-    "description": "Optimind plugin marketplace.",
-    "version": "0.5.0"
+    "description": "Optimind plugin marketplace."
   },
   "plugins": [
     {
       "name": "optimind-docs",
       "source": "./",
-      "description": "One command, /polish, that rebuilds Word and PDF reports as fully branded Optimind documents. Five role-specific subagents (Intake, Auditor, Classifier, DS-Extender, Renderer-QA) orchestrate a deterministic Python pipeline, extend the design system via Figma round-trip when novel elements appear, and auto-retry on QA failure. Source text is preserved verbatim; every run emits a classification sidecar and an HTML audit report.",
-      "version": "0.5.0",
+      "description": "One command, /polish, that rebuilds Word and PDF reports as fully branded Optimind documents. Five role-specific subagents (Intake, Auditor, Classifier, DS-Extender, Renderer-QA) orchestrate a deterministic Python pipeline, extend the design system when novel elements appear, and auto-retry on QA failure. Source text is preserved verbatim; every run emits a classification sidecar and an HTML audit report.",
       "author": {
         "name": "Optimind"
       },

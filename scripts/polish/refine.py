@@ -42,6 +42,9 @@ _DECOR_DARK_VARIANCE = 25       # low variance → flat fill / gradient, not con
 _DECOR_MIN_BYTES = 4000         # tiny icons are dropped by chart_extract already
 _MIN_IMAGE_AREA_PIXELS = 900    # anything smaller than 30×30 is chrome
 _DECOR_PREBODY_INDEX = 3        # images this early (before first heading) = cover branding
+_DECOR_LOGO_MEAN_LOW  = 220     # near-white backgrounds → logo / watermark
+_DECOR_LOGO_VARIANCE  = 35      # low variance in near-white image → solid logo bg
+_DECOR_PREBODY_SCAN   = 15      # scan this many blocks for pre-body chrome images
 _TRAILING_CLUTTER_MAX_CHARS = 200
 _TRAILING_CLUTTER_WINDOW = 8
 _HEADING_FRAGMENT_MAX_CHARS = 30
@@ -74,9 +77,11 @@ _CHROME_HINTS = (
 
 # ── Entry point ─────────────────────────────────────────────────────────────
 
-def refine(blocks: list[Block]) -> tuple[list[Block], list[str]]:
+def refine(blocks: list[Block], *, title: str = "", client: str = "", period: str = "") -> tuple[list[Block], list[str]]:
     """Apply all refinements in a fixed order. Returns (new_blocks, warnings)."""
     warnings: list[str] = []
+    blocks, w = _strip_cover_region(blocks, title=title, client=client, period=period)
+    warnings.extend(w)
     blocks, w = _merge_fragmented_headings(blocks)
     warnings.extend(w)
     blocks, w = _defragment_source_tables(blocks)
@@ -89,17 +94,149 @@ def refine(blocks: list[Block]) -> tuple[list[Block], list[str]]:
     warnings.extend(w)
     blocks, w = _fuse_label_mashed_value_runs(blocks)
     warnings.extend(w)
+    blocks, w = _fuse_kpi_pairs(blocks)
+    warnings.extend(w)
     blocks, w = _drop_orphan_numeric_paragraphs(blocks)
     warnings.extend(w)
     blocks, w = _drop_mashed_numeric_paragraphs(blocks)
     warnings.extend(w)
     blocks, w = _drop_malformed_tables(blocks)
     warnings.extend(w)
+    blocks, w = _fuse_kpi_strips_to_table(blocks)
+    warnings.extend(w)
     blocks, w = _drop_decorative_figures(blocks)
     warnings.extend(w)
     blocks, w = _trim_trailing_clutter(blocks)
     warnings.extend(w)
     return blocks, warnings
+
+
+# ── Cover-region strip ─────────────────────────────────────────────────────
+
+_COVER_LABEL_RE = re.compile(
+    r'^(client|reporting\s*period|prepared\s*by|date|period|report\s*date'
+    r'|document\s*title|project|prepared\s*for|confidential)[\s:]*$',
+    re.IGNORECASE,
+)
+
+# Max blocks to scan from the top for cover content.
+_COVER_SCAN_LIMIT = 20
+# Minimum character length of a paragraph to consider it "real body content".
+_BODY_MIN_CHARS = 80
+
+
+def _strip_cover_region(
+    blocks: list[Block], *, title: str = "", client: str = "", period: str = ""
+) -> tuple[list[Block], list[str]]:
+    """Drop blocks that belong to the source document's cover page.
+
+    The branded cover is rendered from the Jinja template; the body must not
+    also contain the source-doc's cover content (title, client label, period
+    label, logo images, decorative graphics).
+
+    Strategy: scan the first _COVER_SCAN_LIMIT blocks. A block is cover content
+    when its text matches:
+      - The document title (exact or contained)
+      - A short cover meta-label ("Client:", "Reporting Period:", etc.)
+      - A short value that follows a meta-label (e.g. "March2026")
+      - A figure/chart block before the first real body heading
+    We stop stripping as soon as we find the first "real body" heading or a
+    paragraph that is long enough to be body prose (≥ _BODY_MIN_CHARS chars).
+    """
+    if not blocks:
+        return blocks, []
+
+    title_lower = re.sub(r"\s+", "", (title or "").lower())
+    client_lower = re.sub(r"\s+", "", (client or "").lower())
+    period_lower = re.sub(r"\s+", "", (period or "").lower())
+
+    cover_end = 0   # exclusive: blocks[:cover_end] are dropped
+    last_was_label = False
+
+    for idx, b in enumerate(blocks):
+        if idx >= _COVER_SCAN_LIMIT:
+            break
+
+        if b.kind in ("figure", "chart"):
+            # Images and charts before the first real section are cover chrome.
+            cover_end = idx + 1
+            last_was_label = False
+            continue
+
+        if b.kind in ("heading", "paragraph"):
+            if b.kind == "heading":
+                text = b.content.text or ""
+            else:
+                text = _paragraph_text(b.content)
+
+            text_stripped = text.strip()
+            text_squash = re.sub(r"\s+", "", text_stripped.lower())
+
+            # Matches document title
+            if title_lower and (text_squash == title_lower
+                                 or text_squash in title_lower
+                                 or title_lower in text_squash):
+                cover_end = idx + 1
+                last_was_label = False
+                continue
+
+            # Matches client name
+            if client_lower and (text_squash == client_lower
+                                  or client_lower in text_squash):
+                cover_end = idx + 1
+                last_was_label = False
+                continue
+
+            # Matches period
+            if period_lower and (text_squash == period_lower
+                                  or period_lower in text_squash):
+                cover_end = idx + 1
+                last_was_label = False
+                continue
+
+            # Short cover meta-label ("Client:", "Reporting Period:", etc.)
+            if _COVER_LABEL_RE.match(text_stripped):
+                cover_end = idx + 1
+                last_was_label = True
+                continue
+
+            # Short value paragraph immediately after a label
+            if last_was_label and len(text_stripped) <= 50:
+                cover_end = idx + 1
+                last_was_label = False
+                continue
+
+            # Short standalone paragraph (≤50 chars) that looks like cover meta
+            if len(text_stripped) <= 30 and not text_stripped.endswith("."):
+                cover_end = idx + 1
+                last_was_label = False
+                continue
+
+            # Long paragraph or real heading → body starts here
+            if len(text_stripped) >= _BODY_MIN_CHARS or (
+                b.kind == "heading" and b.content.level in (1, 2)
+            ):
+                break
+
+            last_was_label = False
+
+        elif b.kind == "list":
+            # A list right after cover content is likely a Table of Contents bullet.
+            # If very short, treat as cover; otherwise stop.
+            items = b.content.items if hasattr(b.content, "items") else []
+            all_short = all(len(_list_item_text(it)) <= 40 for it in items)
+            if all_short and len(items) <= 5:
+                cover_end = idx + 1
+                continue
+            break
+        else:
+            break
+
+    if cover_end == 0:
+        return blocks, []
+
+    dropped = cover_end
+    return blocks[cover_end:], [f"refine: stripped {dropped} cover-region block(s)"]
 
 
 # ── Letter-spaced text reconstitution ───────────────────────────────────────
@@ -342,11 +479,10 @@ def _fuse_parallel_lists(blocks: list[Block]) -> tuple[list[Block], list[str]]:
 
         rows = [[lbl, val] for lbl, val in zip(labels, values)] if label_side == "left" \
                else [[lbl, val] for lbl, val in zip(labels, values)]
-        # Emit as a Minimal table with no header — numeric col auto-right-aligns.
         table = Table(
             headers=[],
             rows=rows,
-            variant="minimal",
+            variant="classic",
             merges=[],
             caption=None,
         )
@@ -479,6 +615,187 @@ def _drop_malformed_tables(blocks: list[Block]) -> tuple[list[Block], list[str]]
     return out, warnings
 
 
+# ── KPI-strip → table fusion ────────────────────────────────────────────────
+
+def _kpi_run_looks_like_table(strips: list[Block]) -> bool:
+    """Return True when a run of kpi_strips should be a table rather than cards.
+
+    Fires when ANY card position has labels that:
+      - vary across strips (not a stable metric descriptor), AND
+      - are "long" (> 20 chars) OR contain underscores / mixed-case entity names.
+
+    True KPI metrics have short, stable labels like "Total Revenue" or "CTR".
+    Table rows have long, entity-specific labels like "MDC_QA_SEARCH_BROAD".
+    """
+    n_cards = len(strips[0].content.cards)
+    for ci in range(n_cards):
+        labels = [s.content.cards[ci].label or "" for s in strips]
+        unique_labels = set(labels)
+        if len(unique_labels) <= 1:
+            continue  # stable label — not a row-key
+        # Varying labels: check if they look like entity names
+        if any(len(lb) > 20 or "_" in lb for lb in labels):
+            return True
+    return False
+
+
+def _fuse_kpi_strips_to_table(blocks: list[Block]) -> tuple[list[Block], list[str]]:
+    """Convert runs of ≥3 consecutive kpi_strip blocks with equal card counts to
+    a Classic table.
+
+    Pattern seen in design-tool exports: one kpi_strip per data row where
+    card.label is the row identifier (e.g. campaign name) and card.value is
+    the metric. These should be a table, not side-by-side KPI cards.
+
+    Header inference:
+      - For each card position i, if the label is constant across all strips
+        → use it as the column header for the value column.
+      - If the label varies → the label IS data; leave the header blank.
+    If all header cells would be blank, no header row is emitted (headers=[]).
+    """
+    if not blocks:
+        return blocks, []
+    out: list[Block] = []
+    fused = 0
+    i = 0
+    while i < len(blocks):
+        if blocks[i].kind != "kpi_strip":
+            out.append(blocks[i])
+            i += 1
+            continue
+        # Collect a run of kpi_strips with the same card count.
+        run = [blocks[i]]
+        n_cards = len(blocks[i].content.cards)
+        j = i + 1
+        while j < len(blocks) and blocks[j].kind == "kpi_strip" \
+                and len(blocks[j].content.cards) == n_cards:
+            run.append(blocks[j])
+            j += 1
+        if len(run) < 3:
+            out.extend(run)
+            i = j
+            continue
+        # Only fuse when the strips look like table rows, not true KPI metrics.
+        # True KPI metrics: labels are short, generic, mostly stable across strips.
+        # Table rows: at least one card position has long or varying labels
+        #             (entity names like "MDC_QA_SEARCH_BROAD").
+        if not _kpi_run_looks_like_table(run):
+            out.extend(run)
+            i = j
+            continue
+        # Build header row: for each card position, check label consistency.
+        label_sets = [
+            {s.content.cards[ci].label or "" for s in run}
+            for ci in range(n_cards)
+        ]
+        header_row: list[str] = []
+        for ci in range(n_cards):
+            if len(label_sets[ci]) == 1:
+                const_label = next(iter(label_sets[ci]))
+                header_row.extend([const_label or "", ""])
+            else:
+                header_row.extend(["", ""])
+        has_header = any(h.strip() for h in header_row)
+        headers = [header_row] if has_header else []
+        # Build data rows: [label, value, label, value, ...] per strip.
+        rows = [
+            [cell for card in strip.content.cards
+             for cell in (card.label or "", card.value or "")]
+            for strip in run
+        ]
+        tbl = Table(headers=headers, rows=rows, variant="classic",
+                    merges=[], caption=None)
+        out.append(Block(kind="table", classification_source="rule",
+                         content=tbl, source_index=blocks[i].source_index,
+                         notes=["fused-from-kpi-strips"]))
+        fused += 1
+        i = j
+
+    warnings = [f"refine: fused {fused} kpi-strip run(s) into table(s)"] if fused else []
+    return out, warnings
+
+
+# ── KPI pair fusion ─────────────────────────────────────────────────────────
+
+_KPI_VALUE_RE = re.compile(
+    r'^\s*[\$€£¥]?\s*[-+]?\d{1,3}(?:,\d{3})*(?:\.\d+)?\s*[KkMmBb]?\s*%?\s*$'
+    r'|^\s*[\$€£¥]?\s*[-+]?\d+(?:\.\d+)?\s*[KkMmBb]?\s*%?\s*$'
+)
+
+
+def _fuse_kpi_pairs(blocks: list[Block]) -> tuple[list[Block], list[str]]:
+    """Fuse adjacent two-paragraph KPI fragments into a kpi_strip card.
+
+    Pattern from design-tool exports:
+        $1.2M          (short numeric-only paragraph — the value)
+        Total Revenue  (short label paragraph — the metric name)
+
+    Or the reverse order (label first, then value). When we see N consecutive
+    such pairs (N ≥ 2), fuse them into a single kpi_strip block so they render
+    as the branded side-by-side metric cards.
+
+    We also catch the case where value+label are in the same paragraph but
+    separated by a newline — that scenario is handled by normalize.py's text
+    collapse before we get here, so only the split-paragraph case needs fixing.
+    """
+    if not blocks:
+        return blocks, []
+    out: list[Block] = []
+    fused_cards = 0
+    i = 0
+    while i < len(blocks):
+        # Attempt to collect a run of (value, label) or (label, value) pairs
+        # starting at i. Each pair is exactly 2 adjacent paragraphs.
+        pairs: list[KPICard] = []
+        j = i
+        while j + 1 < len(blocks):
+            a = blocks[j]
+            b = blocks[j + 1]
+            if a.kind != "paragraph" or b.kind != "paragraph":
+                break
+            a_text = _paragraph_text(a.content).strip()
+            b_text = _paragraph_text(b.content).strip()
+            # Detect (value, label) or (label, value) — value is pure numeric,
+            # label is short prose (not numeric, not empty).
+            if _KPI_VALUE_RE.match(a_text) and _looks_kpi_label(b_text):
+                pairs.append(KPICard(value=a_text, label=b_text, delta=None))
+                j += 2
+            elif _looks_kpi_label(a_text) and _KPI_VALUE_RE.match(b_text):
+                pairs.append(KPICard(value=b_text, label=a_text, delta=None))
+                j += 2
+            else:
+                break
+        if len(pairs) >= 2:
+            out.append(Block(
+                kind="kpi_strip",
+                classification_source="rule",
+                content=KPIStrip(cards=pairs),
+                source_index=blocks[i].source_index,
+                notes=["fused-from-kpi-pairs"],
+            ))
+            fused_cards += len(pairs)
+            i = j
+        else:
+            out.append(blocks[i])
+            i += 1
+    warnings = (
+        [f"refine: fused {fused_cards} KPI pair(s) into kpi_strip block(s)"]
+        if fused_cards else []
+    )
+    return out, warnings
+
+
+def _looks_kpi_label(text: str) -> bool:
+    """Short prose label suitable for a KPI card (not numeric, not empty, not long)."""
+    if not text or len(text) > 50:
+        return False
+    if _KPI_VALUE_RE.match(text):
+        return False
+    if not re.search(r'[A-Za-z]{2,}', text):
+        return False
+    return True
+
+
 # ── Decorative-figure drop ──────────────────────────────────────────────────
 
 def _drop_decorative_figures(blocks: list[Block]) -> tuple[list[Block], list[str]]:
@@ -539,9 +856,30 @@ def _drop_decorative_figures(blocks: list[Block]) -> tuple[list[Block], list[str
             dropped_dark += 1
             continue
 
-        # Pre-body branding / watermark (low-variance image before the first H1)
-        if (first_heading_idx is not None and idx < first_heading_idx
-                and (idx < _DECOR_PREBODY_INDEX or variance < 35)):
+        # Near-white / logo background (e.g. "Powered by Ubono LTD" stamp)
+        if mean >= _DECOR_LOGO_MEAN_LOW and variance < _DECOR_LOGO_VARIANCE:
+            dropped_prebody += 1
+            continue
+
+        # Chrome caption on a figure → drop regardless of position
+        caption_text = (getattr(fig, "caption", None) or "").strip()
+        if caption_text:
+            cap_squash = re.sub(r'\s+', '', caption_text).lower()
+            if any(hint in cap_squash for hint in _CHROME_HINTS):
+                dropped_prebody += 1
+                continue
+
+        # Pre-body branding / watermark — use a broader scan window and handle
+        # the edge case where first_heading_idx == 0 (doc title was stripped).
+        is_prebody = (
+            idx < _DECOR_PREBODY_SCAN
+            and (
+                first_heading_idx is None
+                or idx <= first_heading_idx
+                or (idx < first_heading_idx + _DECOR_PREBODY_SCAN and variance < 35)
+            )
+        )
+        if is_prebody and (idx < _DECOR_PREBODY_INDEX or variance < 35):
             dropped_prebody += 1
             continue
 

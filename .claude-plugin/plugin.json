@@ -1,9 +1,27 @@
 {
   "name": "optimind-docs",
-  "version": "0.5.0",
-  "description": "One command, /polish, that rebuilds Word and PDF reports as fully branded Optimind documents. A five-role subagent orchestration (Intake, Auditor, Classifier, DS-Extender, Renderer-QA) handles ambiguous content, extends the design system when novel elements appear (round-tripped to Figma via the use_figma MCP), and auto-retries on QA failure. Source text, numbers, dates, and values are preserved verbatim. Emits a branded .docx plus a classification sidecar and an HTML audit report for every run.",
+  "description": "One command, /polish, that rebuilds Word and PDF reports as fully branded Optimind documents. A five-role subagent orchestration (Intake, Auditor, Classifier, DS-Extender, Renderer-QA) handles ambiguous content, extends the design system when novel elements appear, and auto-retries on QA failure. Source text, numbers, dates, and values are preserved verbatim. Emits a branded .docx plus a classification sidecar and an HTML audit report for every run.",
   "author": {
-    "name": "Optimind"
+    "name": "Optimind",
+    "email": "tony.g@optimind.co"
   },
-  "keywords": ["docx", "word", "pdf", "branding", "design-system", "optimind", "polisher", "subagents", "figma"]
+  "homepage": "https://github.com/optimind-studio/optimind-docs-agent",
+  "repository": "https://github.com/optimind-studio/optimind-docs-agent",
+  "license": "UNLICENSED",
+  "keywords": ["docx", "word", "pdf", "branding", "design-system", "optimind", "polisher", "subagents"],
+  "hooks": "./hooks/hooks.json",
+  "userConfig": {
+    "output_dir": {
+      "type": "directory",
+      "title": "Output directory",
+      "description": "Where polished .docx files and HTML audit reports are saved.",
+      "default": "~/OptimindDocs/output"
+    },
+    "state_dir": {
+      "type": "directory",
+      "title": "State directory",
+      "description": "Where per-run state bundles are stored. Safe to delete after a run.",
+      "default": "~/OptimindDocs/.polish-state"
+    }
+  }
 }

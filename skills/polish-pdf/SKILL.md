@@ -1,6 +1,8 @@
 ---
 name: polish-pdf
 description: Deprecated in v0.5.0 — redirects to the unified /polish skill, which auto-detects .pdf and .docx. This stub only exists so users who still invoke /polish-pdf get pointed at the new command without errors.
+disable-model-invocation: true
+user-invocable: true
 ---
 
 # Deprecated — use `/polish`

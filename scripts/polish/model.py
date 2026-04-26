@@ -62,7 +62,7 @@ class MergeSpec:
 class Table:
     headers: list[list[str]]            # list of header rows (supports multi-row headers)
     rows: list[list[str]]
-    variant: Literal["classic", "minimal"] = "classic"
+    variant: str = "classic"  # reserved — always renders as classic
     merges: list[MergeSpec] = field(default_factory=list)
     caption: str | None = None
 
@@ -129,12 +129,44 @@ class Figure:
 
 # ── Top-level block ──────────────────────────────────────────────────────────
 
-BlockContent = Union[Heading, Paragraph, List, Table, KPIStrip, Callout, Chart, Figure]
+# ── PDF-specific layout blocks ───────────────────────────────────────────────
+
+@dataclass
+class SectionLabel:
+    """Numbered section marker, e.g. "01 — OVERVIEW"."""
+    text: str
+    number: str | None = None   # "01" or None
+
+
+@dataclass
+class ActionCard:
+    """Numbered recommendation card with a bold title and body."""
+    number: str          # "1", "2", "🎯", etc.
+    title: str
+    body: str
+
+
+@dataclass
+class ComparisonPanel:
+    """Two-column panel comparing positives vs. negatives."""
+    left_title: str
+    left_items: list[str]
+    right_title: str
+    right_items: list[str]
+
+
+# ── Top-level block ──────────────────────────────────────────────────────────
+
+BlockContent = Union[
+    Heading, Paragraph, List, Table, KPIStrip, Callout, Chart, Figure,
+    SectionLabel, ActionCard, ComparisonPanel,
+]
 
 BlockKind = Literal[
     "heading", "paragraph", "list",
     "table", "kpi_strip",
     "callout", "chart", "figure",
+    "section_label", "action_card", "comparison_panel",
 ]
 
 

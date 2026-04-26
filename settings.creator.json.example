@@ -1,0 +1,10 @@
+{
+  "_comment": "CREATOR-ONLY. Merge these keys into your local settings.json (which is gitignored) to enable the Figma round-trip in DS-Extender. Not needed by colleagues — the agent degrades gracefully to staged_code_only when Figma MCP is unavailable.",
+  "polish": {
+    "figma": {
+      "file_key": "iYE9CtCoxRESvSGtTrfBhs",
+      "target_page": "Doc",
+      "anchor_node_id": "2501:286"
+    }
+  }
+}

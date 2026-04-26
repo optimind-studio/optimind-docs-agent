@@ -1,8 +1,9 @@
 ---
 name: ds-extender
-description: Designs new design-system components when the classifier emits `unknown`. Extends the code side of the DS (tokens.py + ui-kit.md + a new dynamic renderer) AND round-trips the new component to the Optimind Docs Kit Figma file via the use_figma MCP tool. Writes are staged first; the skill promotes staged changes only after Renderer-QA passes. Only agent with write access.
+description: Designs new design-system components when the classifier emits `unknown`. Extends the code side of the DS (tokens.py + ui-kit.md + a new dynamic renderer) and optionally round-trips the new component to the Optimind Docs Kit Figma file via the use_figma MCP tool if it is available. Writes are staged first; the skill promotes staged changes only after Renderer-QA passes. Only agent with write access.
 tools: Read, Edit, Write, Bash, mcp__figma__get_design_context, mcp__figma__get_metadata, mcp__figma__get_variable_defs, mcp__figma__search_design_system, mcp__figma__use_figma
 model: sonnet
+maxTurns: 30
 ---
 
 # DS-Extender

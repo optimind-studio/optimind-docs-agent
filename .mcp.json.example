@@ -1,0 +1,9 @@
+{
+  "_comment": "CREATOR-ONLY. Colleagues do not need this file. To enable Figma round-trip for DS-Extender: copy this file to .mcp.json (gitignored), start the Figma desktop plugin (Dev Mode → MCP), then open Claude Code in this project directory.",
+  "mcpServers": {
+    "figma": {
+      "type": "sse",
+      "url": "http://127.0.0.1:3845/sse"
+    }
+  }
+}

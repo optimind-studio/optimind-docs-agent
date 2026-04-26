@@ -142,10 +142,10 @@ def _normalize_paragraph(tok: dict) -> tuple[str, list[dict], bool]:
 
     new_runs: list[dict] = []
     for r in old_runs:
-        rt = _collapse_ws(_reconstitute_letterspaced(r.get("text") or ""))
+        # Collapse internal whitespace but preserve boundary spaces — they are
+        # word separators between adjacent runs and must not be stripped away.
+        rt = _WS_RE.sub(" ", _reconstitute_letterspaced(r.get("text") or ""))
         if not rt:
-            # Runs that were purely whitespace / newline-fragmentation disappear.
-            # Bold/italic state of an empty run has nothing to carry.
             continue
         new_runs.append({
             "text": rt,
